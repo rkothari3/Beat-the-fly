@@ -1,0 +1,10 @@
+{
+  "region": "central_complex",
+  "val_acc_train": 0.9584055459272097,
+  "intact": 0.955,
+  "shuffled": 0.0995,
+  "zeroed": 0.1265,
+  "n_neurons": 2950,
+  "n_edges": 402394,
+  "claim": "Performance drops when real wiring is destroyed, evidence the frozen connectome carries the behavior."
+}

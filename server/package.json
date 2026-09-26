@@ -1,0 +1,11 @@
+{
+  "name": "beat-the-fly-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.16.0"
+  }
+}

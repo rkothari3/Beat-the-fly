@@ -1,0 +1,144 @@
+/**
+ * Shared design tokens for Beat the Fly.
+ * Why: one place for colors/type/spacing so the picker, match HUD, and brain
+ * panel stay visually consistent without copy-pasting hex codes.
+ *
+ * Design direction: Linear/Raycast-style dark pro tool.
+ *   - Near-black NEUTRAL surfaces (low blue saturation) layered in quiet steps.
+ *   - ONE primary accent (teal) for interactive/selected states.
+ *   - YOU amber / FLY violet are semantic player identity colors only — they
+ *     never decorate buttons or badges, which keeps the chrome calm.
+ *   - Hairline 1px borders + soft shadows instead of neon glows.
+ */
+
+:root {
+  /* Surfaces — elevated steps must stay in-family but readable as layers */
+  --bg-app: #0a0b0f;
+  --bg-panel: #0e1117;
+  --bg-card: #151a23;
+  --bg-inset: #0b0e14;
+  --bg-elevated: #1b2230;
+
+  /* Borders — hairlines; "strong" is for inputs/keycaps, not decoration */
+  --border-subtle: #212939;
+  --border-strong: #33405a;
+  --border-accent: #2dd4bf;
+
+  /* Text — slightly softened primary so pure-white glare doesn't fatigue */
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #5f6f86;
+
+  /* Accents — teal is the product accent; blue/pink are chart semantics */
+  --accent-teal: #2dd4bf;
+  --accent-blue: #5b9cf5;
+  --accent-pink: #f87171;
+  /* Player identity (semantic only — score dots, viewport pills) */
+  --accent-you: #f5a524;
+  --accent-fly: #a78bfa;
+
+  /* Neuron stage colors (brain-panel spike cards) */
+  --ring: #2dd4bf;
+  --pfn: #5b9cf5;
+  --pfl: #f87171;
+  --relay: #4a5568;
+
+  /* Type */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --text-hero: 26px;
+  --text-title: 20px;
+  --text-body: 13px;
+  --text-label: 10px;
+  --text-mono-lg: 24px;
+  --text-mono: 11px;
+  --text-mono-sm: 10px;
+
+  /* Space — 4px base grid; components pick from these, never raw pixels */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* Radii */
+  --radius-pill: 999px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Elevation — quiet layered depth (no colored glow except selected state) */
+  --shadow-card:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    0 10px 24px rgba(0, 0, 0, 0.45);
+  --shadow-selected:
+    0 0 0 1.5px var(--border-accent),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 8px 28px rgba(45, 212, 191, 0.16),
+    0 16px 40px rgba(0, 0, 0, 0.45);
+  --shadow-viewport:
+    0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 6px 16px rgba(0, 0, 0, 0.4),
+    0 20px 48px rgba(0, 0, 0, 0.5);
+  --shadow-panel:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    -1px 0 0 rgba(255, 255, 255, 0.03),
+    -12px 0 40px rgba(0, 0, 0, 0.4);
+  --shadow-inset:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    inset 0 2px 10px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Keyboard focus must be visible (hackathon judges tab around demos). */
+:focus-visible {
+  outline: 2px solid var(--accent-teal);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(45, 212, 191, 0.28);
+}
+
+/* Quiet scrollbars that match the dark chrome (WebKit + Firefox). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}

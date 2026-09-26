@@ -1,0 +1,32 @@
+# Dependencies & build
+node_modules/
+app/node_modules/
+server/node_modules/
+app/dist/
+brain/.venv/
+**/__pycache__/
+*.pyc
+
+# Large MaleCNS flat files (download with fetch script / curl — do not commit)
+brain/data/*.feather
+brain/data/dataset.jsonl
+
+# Checkpoints are OK to commit if small; region npz can be regenerated
+brain/checkpoints/*.pt
+
+# Env / secrets
+.env
+**/.env
+server/.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.expo/
+app/_expo_upstream/
+.cursor/
+*.plan.md
+
+# Local research scrapes (not part of the app)
+_viz_refs/
+_crossy_ref/
