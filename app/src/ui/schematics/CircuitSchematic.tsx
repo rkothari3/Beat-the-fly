@@ -263,6 +263,59 @@ function Dot({ d }: { d: CircuitDot }) {
   );
 }
 
+/** Soft AL → MB → CX strip for the pathway picker card. */
+export function PathwayCircuitSchematic() {
+  const al: { x: number; y: number }[] = [];
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    al.push({ x: 36 + Math.cos(a) * 12, y: 36 + Math.sin(a) * 12 });
+  }
+  const mb: { x: number; y: number }[] = [];
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 6; c++) {
+      mb.push({ x: 100 + c * 6, y: 24 + r * 6 });
+    }
+  }
+  const cx: { x: number; y: number }[] = [];
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    cx.push({ x: 210 + Math.cos(a) * 14, y: 36 + Math.sin(a) * 14 });
+  }
+
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label="Pathway: Antennal Lobe to Mushroom Body to Central Complex"
+      style={{ display: "block" }}
+    >
+      <FlowArrow x1={54} x2={94} y={36} />
+      <FlowArrow x1={142} x2={188} y={36} />
+      {al.map((p, i) => (
+        <circle key={`a${i}`} cx={p.x} cy={p.y} r={1.8} fill="var(--ring)" opacity={0.9} />
+      ))}
+      {mb.map((p, i) => (
+        <circle key={`m${i}`} cx={p.x} cy={p.y} r={1.7} fill="var(--pfn)" opacity={0.9} />
+      ))}
+      {cx.map((p, i) => (
+        <circle key={`c${i}`} cx={p.x} cy={p.y} r={1.9} fill="#73ebff" opacity={0.95} />
+      ))}
+      <StageLabel x={36} y={76} color="var(--ring)">
+        AL
+      </StageLabel>
+      <StageLabel x={118} y={76} color="var(--pfn)">
+        MB
+      </StageLabel>
+      <StageLabel x={210} y={76} color="#73ebff">
+        CX
+      </StageLabel>
+    </svg>
+  );
+}
+
 /** Kenyon cells → MBONs — associative memory pipeline. */
 export function MbCircuitSchematic() {
   const kc: { x: number; y: number }[] = [];

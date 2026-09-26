@@ -1,57 +1,81 @@
 /**
- * Brain-region picker overlay (prompt_2).
- * Full-bleed centered cards over dimmed match — not a side panel.
- * Selection → Start round keeps the existing onPick → startRound flow.
+ * Brain-mode picker overlay.
+ * Primary: Full pathway AL→MB→CX (hybrid with look-ahead).
+ * Secondary: single-region ablations.
  */
 
 import React from "react";
 import { motion, useReducedMotion, type Transition, type Variants } from "motion/react";
 import { RegionKey } from "../brain/LifEngine";
-import { REGION_STATS } from "./BrainPanel";
+import { PlayMode } from "../brain/PathwayEngine";
+import { REGION_STATS, PATHWAY_STATS } from "./BrainPanel";
 import {
   AlCircuitSchematic,
   CxCircuitSchematic,
   MbCircuitSchematic,
+  PathwayCircuitSchematic,
 } from "./schematics/CircuitSchematic";
 
 /**
  * Who decides the fly's hops.
- * Default "bot" = one look-ahead scripted opponent (no Strong/Hard picker).
- * Optional "brain" = live region LIF for the science demo (often easier to beat).
+ * "brain" = pathway hybrid (or single-region LIF ablation).
+ * "bot" = look-ahead only (atlas still glows).
  */
 export type FlyOpponent = "bot" | "brain";
 
-export const REGIONS: {
+export const PLAY_MODES: {
+  key: PlayMode;
+  label: string;
+  short: string;
+  category: string;
+  blurb: string;
+  hero?: boolean;
+  ablation?: boolean;
+}[] = [
+  {
+    key: "pathway",
+    label: "Full pathway AL→MB→CX",
+    short: "PATH",
+    category: "MALECNS PATHWAY",
+    blurb:
+      "Soft cascade of three frozen MaleCNS regions. Live mode: pathway scores moves, look-ahead search picks the hop.",
+    hero: true,
+  },
+  {
+    key: "central_complex",
+    label: "Central Complex",
+    short: "CX",
+    category: "ABLATION · CX ONLY",
+    blurb: "Single-region LIF only (no search). Science contrast vs the full pathway.",
+    ablation: true,
+  },
+  {
+    key: "mushroom_body",
+    label: "Mushroom Body",
+    short: "MB",
+    category: "ABLATION · MB ONLY",
+    blurb: "Single-region LIF only (no search). Kenyon cells → MBONs.",
+    ablation: true,
+  },
+  {
+    key: "antennal_lobe",
+    label: "Antennal Lobe",
+    short: "AL",
+    category: "ABLATION · AL ONLY",
+    blurb: "Single-region LIF only (no search). ORN → PN smell relay.",
+    ablation: true,
+  },
+];
+
+/** @deprecated use PLAY_MODES — kept for stats lookups */
+export const REGIONS = PLAY_MODES.filter((m) => m.key !== "pathway") as {
   key: RegionKey;
   label: string;
   short: string;
   category: string;
   blurb: string;
   hero?: boolean;
-}[] = [
-  {
-    key: "central_complex",
-    label: "Central Complex",
-    short: "CX",
-    category: "NAVIGATION & STEERING",
-    blurb: "Real navigation/steering center. Ring → PFN → PFL pipeline on frozen MaleCNS wiring.",
-    hero: true,
-  },
-  {
-    key: "mushroom_body",
-    label: "Mushroom Body",
-    short: "MB",
-    category: "LEARNING & MEMORY",
-    blurb: "Real learning/memory center. Kenyon cells → MBONs — associative pathways.",
-  },
-  {
-    key: "antennal_lobe",
-    label: "Antennal Lobe",
-    short: "AL",
-    category: "SENSORY / SMELL",
-    blurb: "Real smell center. Fast ORN → PN pathway — twitchy sensory relay.",
-  },
-];
+}[];
 
 /** Why CSS vars: keep picker elevation in sync with BrainPanel / tokens. */
 const SHADOW = {
@@ -83,10 +107,16 @@ function cardVariants(reduce: boolean): Variants {
   };
 }
 
-function SchematicFor({ region }: { region: RegionKey }) {
-  if (region === "central_complex") return <CxCircuitSchematic compact />;
-  if (region === "mushroom_body") return <MbCircuitSchematic />;
+function SchematicFor({ mode }: { mode: PlayMode }) {
+  if (mode === "pathway") return <PathwayCircuitSchematic />;
+  if (mode === "central_complex") return <CxCircuitSchematic compact />;
+  if (mode === "mushroom_body") return <MbCircuitSchematic />;
   return <AlCircuitSchematic />;
+}
+
+function statsFor(mode: PlayMode) {
+  if (mode === "pathway") return PATHWAY_STATS;
+  return REGION_STATS[mode];
 }
 
 function Keycap({ children }: { children: React.ReactNode }) {
@@ -118,22 +148,22 @@ export function RegionPicker({
   onSelect,
   headline,
   selected,
-  opponent = "bot",
+  opponent = "brain",
   onOpponent,
   stats = [],
 }: {
-  onPick: (k: RegionKey, opponent: FlyOpponent) => void;
-  onSelect?: (k: RegionKey) => void;
+  onPick: (k: PlayMode, opponent: FlyOpponent) => void;
+  onSelect?: (k: PlayMode) => void;
   headline?: string;
-  selected?: RegionKey;
+  selected?: PlayMode;
   opponent?: FlyOpponent;
   onOpponent?: (o: FlyOpponent) => void;
   stats?: { region: string; matches: number; fly_wins: number }[];
 }) {
   const reduce = useReducedMotion() ?? false;
   const variants = cardVariants(reduce);
-  const current = selected ?? "central_complex";
-  const currentMeta = REGIONS.find((r) => r.key === current)!;
+  const current = selected ?? "pathway";
+  const currentMeta = PLAY_MODES.find((r) => r.key === current)!;
   const currentOpponent = opponent;
 
   return (
@@ -172,20 +202,20 @@ export function RegionPicker({
             lineHeight: 1.25,
           }}
         >
-          {headline ?? "Which real brain region plays?"}
+          {headline ?? "How should the fly think?"}
         </h2>
         <p
           style={{
             margin: 0,
             fontSize: 12,
             color: "var(--text-secondary)",
-            maxWidth: 560,
+            maxWidth: 600,
             marginInline: "auto",
             lineHeight: 1.4,
           }}
         >
-          Pick which real MaleCNS region the fly uses. By default the fly plays as a strong
-          look-ahead bot — tough match, no retrain needed.
+          Default: soft AL→MB→CX cascade of real MaleCNS wiring, with look-ahead search
+          picking legal hops (Fly Chess–style hybrid). Single regions are ablations.
         </p>
       </div>
 
@@ -193,15 +223,16 @@ export function RegionPicker({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 14,
+          gap: 12,
           flex: "1 1 auto",
           minHeight: 0,
           alignContent: "center",
         }}
       >
-        {REGIONS.map((r) => {
+        {PLAY_MODES.map((r) => {
           const isSelected = r.key === current;
-          const st = REGION_STATS[r.key];
+          const st = statsFor(r.key);
+          const isPathwayCard = r.key === "pathway";
           return (
             <motion.button
               key={r.key}
@@ -234,6 +265,7 @@ export function RegionPicker({
                 minHeight: 0,
                 maxHeight: "100%",
                 overflow: "hidden",
+                gridColumn: isPathwayCard ? "1 / -1" : undefined,
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
@@ -281,7 +313,7 @@ export function RegionPicker({
                   flex: "0 0 auto",
                 }}
               >
-                <SchematicFor region={r.key} />
+                <SchematicFor mode={r.key} />
               </div>
 
               <div
@@ -291,7 +323,8 @@ export function RegionPicker({
                   color: "var(--text-muted)",
                 }}
               >
-                {st.neurons.toLocaleString()} neurons · {st.connections.toLocaleString()} connections
+                {st.neurons.toLocaleString()} neurons · {st.connections.toLocaleString()}{" "}
+                connections
               </div>
 
               <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.35 }}>
@@ -315,7 +348,7 @@ export function RegionPicker({
                     color: "var(--text-muted)",
                   }}
                 >
-                  match to teacher moves
+                  {isPathwayCard ? "avg region match · + look-ahead" : "match to teacher moves"}
                 </div>
               </div>
             </motion.button>
@@ -356,8 +389,10 @@ export function RegionPicker({
             Fly opponent:{" "}
             <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
               {currentOpponent === "brain"
-                ? "Live brain (region LIF)"
-                : "Look-ahead bot"}
+                ? current === "pathway"
+                  ? "Pathway hybrid (LIF + search)"
+                  : "Ablation LIF (no search)"
+                : "Look-ahead only"}
             </span>
           </div>
           <label
@@ -386,12 +421,12 @@ export function RegionPicker({
             />
             <span>
               <span style={{ color: "var(--text-secondary)" }}>
-                Demo mode: Live brain (region LIF)
+                Demo mode: Live connectome in the loop
               </span>
               <br />
               <span id="live-brain-hint">
-                Science story — real wiring decides hops. Often easier than the look-ahead bot
-                (imitates a teacher; not whole-brain).
+                Pathway scores hops, then look-ahead picks a legal move. Uncheck for pure
+                look-ahead (still strong).
               </span>
             </span>
           </label>
@@ -407,9 +442,6 @@ export function RegionPicker({
             fontSize: 13,
             fontWeight: 700,
             letterSpacing: "0.02em",
-            // Solid primary CTA (Linear-style): one filled button per screen
-            // tells judges exactly where to click. Dark text on teal passes
-            // contrast at projector distance.
             color: "#052e28",
             background: "var(--accent-teal)",
             border: "none",
@@ -420,7 +452,11 @@ export function RegionPicker({
           }}
         >
           Start round · {currentMeta.label}
-          {currentOpponent === "brain" ? " · Live brain" : " · Look-ahead fly"}
+          {currentOpponent === "brain"
+            ? current === "pathway"
+              ? " · Pathway hybrid"
+              : " · Ablation LIF"
+            : " · Look-ahead fly"}
         </motion.button>
 
         <div
@@ -454,7 +490,8 @@ export function RegionPicker({
             textAlign: "center",
           }}
         >
-          Only the region you pick is simulated — never the whole brain.
+          Soft AL→MB→CX cascade of frozen MaleCNS regions (+ look-ahead). Single
+          cards are ablations — one region LIF, no search.
         </p>
       </div>
 

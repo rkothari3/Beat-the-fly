@@ -1,8 +1,8 @@
 /**
- * Main demo UI — live match chrome (prompt_1) + region picker overlay (prompt_2).
+ * Main demo UI — live match chrome + pathway / region picker overlay.
  *
- * Silent-first design: a stranger should understand the game from on-screen
- * text alone (loud hackathon floor = no audio dependency).
+ * Live pathway (default science mode): AL→MB→CX LIF scores moves, look-ahead
+ * search picks the hop (Fly Chess hybrid). Single-region = ablation LIF-only.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -12,18 +12,16 @@ import { scriptedBot } from "../core/scriptedBot";
 import { SplitScreen } from "../game/SplitScreen";
 import { preloadCrossyAssets } from "../game/CrossyAssets";
 import { LifEngine, loadRegion, RegionKey, StepResult } from "../brain/LifEngine";
+import { PathwayEngine, PlayMode, isPathway, isRegionKey } from "../brain/PathwayEngine";
 import { BrainPanel } from "./BrainPanel";
-import { RegionPicker, REGIONS, FlyOpponent } from "./RegionPicker";
+import { RegionPicker, PLAY_MODES, FlyOpponent } from "./RegionPicker";
 import { TopBar, ViewportPill } from "./TopBar";
 
 type Phase = "picker" | "playing" | "over";
 /**
  * Live decision source for the fly.
- * Default "bot" = one scripted look-ahead opponent (no Strong/Hard tiers).
- * "brain" = region LIF demo (science story; can be easier than the bot).
- *
- * Why look-ahead is enough (flychess analogy): chess.js filters illegal moves so
- * search stays on legal play — our bot scores only safe hops. Don't port full chess RL.
+ * "bot" = look-ahead only.
+ * "brain" = pathway hybrid (prior + search) or single-region LIF ablation.
  */
 type FlyController = "brain" | "bot" | "random";
 
@@ -40,29 +38,27 @@ export function App() {
   const humanRef = useRef<LaneWorld | null>(null);
   const flyRef = useRef<LaneWorld | null>(null);
   const engineRef = useRef<LifEngine | null>(null);
+  const pathwayRef = useRef<PathwayEngine | null>(null);
   const pendingHuman = useRef<Action | null>(null);
 
   const [phase, setPhase] = useState<Phase>("picker");
-  const [region, setRegion] = useState<RegionKey>("central_complex");
+  const [playMode, setPlayMode] = useState<PlayMode>("pathway");
   const [controller, setController] = useState<FlyController>("bot");
-  const [opponent, setOpponent] = useState<FlyOpponent>("bot");
+  const [opponent, setOpponent] = useState<FlyOpponent>("brain");
   const [scores, setScores] = useState({ human: 0, fly: 0 });
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
   const [diag, setDiag] = useState<StepResult | null>(null);
-  const [status, setStatus] = useState("Pick a brain region to start.");
+  const [status, setStatus] = useState("Pick a play mode to start.");
   const [stats, setStats] = useState<{ region: string; matches: number; fly_wins: number }[]>([]);
-  const [pickerSelection, setPickerSelection] = useState<RegionKey>("central_complex");
+  const [pickerSelection, setPickerSelection] = useState<PlayMode>("pathway");
   const seedRef = useRef(1);
 
-  // Warm MagicaVoxel kit as soon as the UI mounts so play doesn't flash boxes.
   useEffect(() => {
     void preloadCrossyAssets().catch((e) =>
       console.error("[crossy] preload failed", e)
     );
   }, []);
 
-  // Bootstrap WebGL once. ResizeObserver keeps the buffer non-zero when the
-  // flex layout settles (a 0x0 first paint was making the canvas look blank).
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -92,8 +88,6 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (phase !== "playing") return;
       const k = e.key.toLowerCase();
-      // No Down/S — classic Crossy allows hop-back; we removed that affordance entirely.
-      // Space = wait in place (STAY), not reverse.
       if (k === "arrowup" || k === "w") pendingHuman.current = ACTION_FORWARD;
       else if (k === "arrowleft" || k === "a") pendingHuman.current = ACTION_LEFT;
       else if (k === "arrowright" || k === "d") pendingHuman.current = ACTION_RIGHT;
@@ -110,9 +104,9 @@ export function App() {
       .catch(() => setStats([]));
   }, [phase]);
 
-  async function startRound(nextRegion: RegionKey, nextOpponent: FlyOpponent = opponent) {
-    setRegion(nextRegion);
-    setPickerSelection(nextRegion);
+  async function startRound(nextMode: PlayMode, nextOpponent: FlyOpponent = opponent) {
+    setPlayMode(nextMode);
+    setPickerSelection(nextMode);
     setOpponent(nextOpponent);
     setStatus("Loading...");
     seedRef.current = (Math.random() * 1e9) | 0;
@@ -120,39 +114,51 @@ export function App() {
     humanRef.current = h;
     flyRef.current = f;
 
-    // Why default to bot? The connectome brain imitates the teacher. Until (re)trained
-    // on a strong teacher, live "brain" mode is often easier to beat than the look-ahead bot.
     let mode: FlyController = opponentToController(nextOpponent);
+    engineRef.current = null;
+    pathwayRef.current = null;
 
     try {
-      const bundle = await loadRegion(nextRegion);
-      const eng = new LifEngine(bundle);
-      const err = eng.runSelfcheck();
-      if (err > 1e-2) {
-        console.warn("selfcheck logit error", err);
-      }
-      engineRef.current = eng;
-
-      if (mode === "brain") {
-        setStatus(
-          err > 1e-2
-            ? `Selfcheck warn (max err=${err.toFixed(4)}) — live brain playing.`
-            : `Live brain: ${bundle.label} (${bundle.n} real neurons). ↑←→ / WASD to hop!`
-        );
+      if (isPathway(nextMode)) {
+        const path = await PathwayEngine.load();
+        const err = path.runSelfcheck();
+        if (err > 1e-2) console.warn("pathway selfcheck logit error", err);
+        pathwayRef.current = path;
+        if (mode === "brain") {
+          setStatus(
+            err > 1e-2
+              ? `Selfcheck warn (max err=${err.toFixed(4)}) — pathway hybrid.`
+              : "Live pathway AL→MB→CX + look-ahead search. ↑←→ / WASD to hop!"
+          );
+        } else {
+          setStatus("Look-ahead fly. Atlas shows AL→MB→CX pathway glow. ↑←→ / WASD!");
+        }
       } else {
-        setStatus(
-          `Look-ahead fly bot. Region panel shows ${bundle.label}. ↑←→ / WASD to hop!`
-        );
+        const bundle = await loadRegion(nextMode);
+        const eng = new LifEngine(bundle);
+        const err = eng.runSelfcheck();
+        if (err > 1e-2) console.warn("selfcheck logit error", err);
+        engineRef.current = eng;
+        if (mode === "brain") {
+          setStatus(
+            err > 1e-2
+              ? `Selfcheck warn (max err=${err.toFixed(4)}) — single-region ablation.`
+              : `Ablation: live ${bundle.label} LIF only (no search). ↑←→ / WASD!`
+          );
+        } else {
+          setStatus(`Look-ahead fly. Panel shows ${bundle.label}. ↑←→ / WASD to hop!`);
+        }
       }
     } catch (e) {
       console.warn("Brain load failed", e);
       engineRef.current = null;
+      pathwayRef.current = null;
       if (mode === "brain") {
         mode = "bot";
         setOpponent("bot");
-        setStatus("Brain weights not found — fly uses look-ahead bot. ↑←→ / WASD to hop!");
+        setStatus("Brain weights not found — fly uses look-ahead bot. ↑←→ / WASD!");
       } else {
-        setStatus("Look-ahead fly ready (no brain weights — bot only). ↑←→ / WASD to hop!");
+        setStatus("Look-ahead fly ready (no brain weights). ↑←→ / WASD to hop!");
       }
     }
     setController(mode);
@@ -206,19 +212,25 @@ export function App() {
           decisionAcc = 0;
           if (fly.alive) {
             let action: Action = ACTION_STAY;
-            if (controller === "brain" && engineRef.current) {
-              const obs = observe(fly);
-              const result = engineRef.current.step(obs);
+            const path = pathwayRef.current;
+            const eng = engineRef.current;
+
+            if (controller === "brain" && path && isPathway(playMode)) {
+              // Hybrid: pathway scores → look-ahead picks legal hop.
+              const result = path.step(observe(fly));
+              setDiag(result);
+              action = scriptedBot(fly, { prior: result.probs });
+            } else if (controller === "brain" && eng) {
+              // Single-region ablation: LIF chooses directly.
+              const result = eng.step(observe(fly));
               action = result.action as Action;
               setDiag(result);
             } else if (controller === "bot") {
-              // One opponent path: deep look-ahead (no Strong/Hard UI tiers).
               action = scriptedBot(fly);
-              // Still step the region LIF for the full-brain activity display (viz only).
-              // Pitch: glowing atlas ≠ the bot that picks the hop.
-              if (engineRef.current) {
-                const result = engineRef.current.step(observe(fly));
-                setDiag(result);
+              if (path) {
+                setDiag(path.step(observe(fly)));
+              } else if (eng) {
+                setDiag(eng.step(observe(fly)));
               }
             } else {
               action = ((Math.random() * 4) | 0) as Action;
@@ -249,9 +261,9 @@ export function App() {
           if (fly.alive) fly.act(scriptedBot(fly));
           if (!human.alive && !fly.alive) {
             seedRef.current = (seedRef.current + 1) | 0;
-            const [h, f] = LaneWorld.pair(seedRef.current);
-            humanRef.current = h;
-            flyRef.current = f;
+            const [h2, f2] = LaneWorld.pair(seedRef.current);
+            humanRef.current = h2;
+            flyRef.current = f2;
             split.human.reset();
             split.fly.reset();
           }
@@ -263,18 +275,18 @@ export function App() {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, controller, region]);
+  }, [phase, controller, playMode]);
 
   function finishRound(human: LaneWorld, fly: LaneWorld) {
     const winner =
       human.score === fly.score ? "Tie" : human.score > fly.score ? "Human wins" : "Fly wins";
-    setStatus(`${winner}! Human ${human.score} — Fly ${fly.score}. Pick a region to rematch.`);
+    setStatus(`${winner}! Human ${human.score} — Fly ${fly.score}. Pick a mode to rematch.`);
     setPhase("over");
     fetch("http://localhost:8787/match", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        region,
+        region: playMode,
         human_score: human.score,
         fly_score: fly.score,
         controller,
@@ -284,8 +296,18 @@ export function App() {
     }).catch(() => {});
   }
 
-  const regionMeta = useMemo(() => REGIONS.find((r) => r.key === region)!, [region]);
+  const modeMeta = useMemo(
+    () => PLAY_MODES.find((r) => r.key === playMode)!,
+    [playMode]
+  );
   const showPicker = phase === "picker" || phase === "over";
+  const pathwayMode = isPathway(playMode);
+  const vizRegion: RegionKey | undefined = isRegionKey(playMode) ? playMode : undefined;
+
+  const flyPillLabel =
+    pathwayMode
+      ? "FLY · AL→MB→CX"
+      : `FLY · ${modeMeta.label}`;
 
   return (
     <div
@@ -305,16 +327,7 @@ export function App() {
         roundSeconds={ROUND_SECONDS}
       />
 
-      {/*
-        Why a relative wrapper: the match grid (game + brain) stays mounted underneath,
-        while the RegionPicker is a full-bleed overlay — matching prompt_2, not a side panel.
-      */}
       <div style={{ position: "relative", flex: 1, minHeight: 0, minWidth: 0 }}>
-        {/*
-          Equal thirds of the window: human | fly | brain.
-          One WebGL canvas spans columns 1–2 (2/3 width); SplitScreen scissors
-          50/50 so each play pane is exactly 1/3 of the page. Column 3 = HUD.
-        */}
         <div
           style={{
             height: "100%",
@@ -331,49 +344,24 @@ export function App() {
               position: "relative",
               minWidth: 0,
               minHeight: 0,
-              overflow: "hidden",
-              background: "var(--bg-inset)",
-              margin: 12,
-              marginRight: 6,
-              borderRadius: "var(--radius-lg)",
-              boxShadow: "var(--shadow-viewport)",
             }}
           >
             <canvas
               ref={canvasRef}
               style={{
-                position: "absolute",
-                inset: 0,
+                display: "block",
                 width: "100%",
                 height: "100%",
-                display: "block",
-                borderRadius: "var(--radius-lg)",
+                background: "#0a0c10",
               }}
             />
-            <div
-              aria-hidden
-              style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: "50%",
-                width: 1,
-                background: "rgba(255,255,255,0.09)",
-                pointerEvents: "none",
-                zIndex: 2,
-              }}
-            />
-
-            {/* Viewport chrome — wraps existing SplitScreen canvas */}
             <div
               style={{
                 position: "absolute",
                 inset: 0,
+                pointerEvents: "none",
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
-                pointerEvents: "none",
-                zIndex: 3,
-                padding: 10,
               }}
             >
               <div style={{ position: "relative" }}>
@@ -381,15 +369,28 @@ export function App() {
               </div>
               <div style={{ position: "relative" }}>
                 <ViewportPill color="var(--accent-fly)">
-                  FLY · {regionMeta.label}
+                  {flyPillLabel}
                   {phase === "playing" && controller === "bot" ? " · look-ahead" : ""}
+                  {phase === "playing" &&
+                  controller === "brain" &&
+                  pathwayMode
+                    ? " · hybrid"
+                    : ""}
                 </ViewportPill>
-                {phase === "playing" && controller === "brain" && (
+                {phase === "playing" && controller === "brain" && pathwayMode && (
                   <ViewportPill
                     color="var(--accent-teal)"
                     style={{ position: "absolute", right: 0, bottom: 0 }}
                   >
-                    LIVE BRAIN · every 0.25 s
+                    PATHWAY + SEARCH · 0.25 s
+                  </ViewportPill>
+                )}
+                {phase === "playing" && controller === "brain" && !pathwayMode && (
+                  <ViewportPill
+                    color="var(--accent-teal)"
+                    style={{ position: "absolute", right: 0, bottom: 0 }}
+                  >
+                    ABLATION LIF · every 0.25 s
                   </ViewportPill>
                 )}
                 {phase === "playing" && controller === "bot" && (
@@ -416,16 +417,20 @@ export function App() {
             }}
           >
             <BrainPanel
-              regionKey={region}
-              label={regionMeta.label}
+              playMode={playMode}
+              regionKey={vizRegion ?? "central_complex"}
+              label={modeMeta.label}
               diag={diag}
-              nSteps={engineRef.current?.region.nSteps}
+              nSteps={
+                pathwayRef.current?.cx.region.nSteps ??
+                engineRef.current?.region.nSteps
+              }
               liveBrain={controller === "brain"}
+              pathwayMode={pathwayMode}
             />
           </aside>
         </div>
 
-        {/* Full-width picker overlay — dims game + brain, centered cards (prompt_2) */}
         {showPicker && (
           <div
             style={{
@@ -457,4 +462,3 @@ export function App() {
     </div>
   );
 }
-

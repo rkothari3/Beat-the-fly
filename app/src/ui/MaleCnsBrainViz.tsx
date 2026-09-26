@@ -230,12 +230,18 @@ async function paintRolesFromSomas(_opts: {
   // no-op — kept so call sites stay stable; carving is ellipsoid-only now.
 }
 
-/** Which particle role a playable region lights up. */
+/** Which particle roles light up for a mode. */
+function hotRolesFor(region: RegionKey | null, pathway: boolean): number[] {
+  if (pathway) return [ROLE_AL, ROLE_MB, ROLE_CX];
+  if (region === "central_complex") return [ROLE_CX];
+  if (region === "mushroom_body") return [ROLE_MB];
+  if (region === "antennal_lobe") return [ROLE_AL];
+  return [];
+}
+
 function hotRoleFor(region: RegionKey | null): number {
-  if (region === "central_complex") return ROLE_CX;
-  if (region === "mushroom_body") return ROLE_MB;
-  if (region === "antennal_lobe") return ROLE_AL;
-  return -1;
+  const h = hotRolesFor(region, false);
+  return h.length ? h[0] : -1;
 }
 
 /**
@@ -252,29 +258,33 @@ export function MaleCnsBrainViz(props: {
   diag: StepResult | null;
   liveBrain: boolean;
   region?: RegionKey;
+  /** Light AL + MB + CX carves together (pathway hybrid). */
+  pathwayMode?: boolean;
   idleAnim?: boolean;
 }) {
-  const { diag, liveBrain, region, idleAnim = true } = props;
+  const { diag, liveBrain, region, pathwayMode = false, idleAnim = true } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const apiRef = useRef<{
     applyActivity: (stage: Record<string, number> | null, boost: boolean) => void;
-    setRegion: (r: RegionKey | null) => void;
+    setRegion: (r: RegionKey | null, pathway?: boolean) => void;
     pulse: () => void;
     /** Flash the exact atlas particles whose region neurons spiked this step. */
-    applySpikes: (spikeCount: Float32Array) => void;
+    applySpikes: (spikeCount: Float32Array, forRegion?: RegionKey) => void;
   } | null>(null);
   const lastPulseKey = useRef(0);
   const liveRef = useRef(liveBrain);
   const idleRef = useRef(idleAnim);
   const regionRef = useRef<RegionKey | null>(region ?? null);
+  const pathwayRef = useRef(pathwayMode);
 
   useEffect(() => {
     liveRef.current = liveBrain;
     idleRef.current = idleAnim;
     regionRef.current = region ?? null;
-    apiRef.current?.setRegion(region ?? null);
-  }, [liveBrain, idleAnim, region]);
+    pathwayRef.current = pathwayMode;
+    apiRef.current?.setRegion(region ?? null, pathwayMode);
+  }, [liveBrain, idleAnim, region, pathwayMode]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -336,8 +346,9 @@ export function MaleCnsBrainViz(props: {
     // Decision flash: decaying scalar (no geometry scale-pop — see pulse()).
     let flash = 0;
     // 0 → 1 ease when a region is selected; drives tint + dim contrast.
-    let focusT = regionRef.current ? 1 : 0;
+    let focusT = regionRef.current || pathwayRef.current ? 1 : 0;
     let selected: RegionKey | null = regionRef.current;
+    let pathwayOn = pathwayRef.current;
 
     const resize = () => {
       if (!renderer) return;
@@ -465,20 +476,17 @@ export function MaleCnsBrainViz(props: {
           return map;
         };
 
-        function applySpikes(spikeCount: Float32Array) {
-          const r = selected;
+        function applySpikes(spikeCount: Float32Array, forRegion?: RegionKey) {
+          const r = forRegion ?? selected;
           if (!r) return;
-          // Async only on first call per region; afterwards the cache hits
-          // synchronously-ish and spikes land on the very next frame.
           void mappingFor(r)
             .then((map) => {
               if (disposed) return;
               const nowMs = performance.now();
-              const nextHot: number[] = [];
+              const nextHot: number[] =
+                forRegion && forRegion !== "antennal_lobe" ? [...hotSpikes] : [];
               const m = Math.min(map.length, spikeCount.length);
-              // Prefer the strongest-firing neurons so flashes read as sparse
-              // hot pops on a dim atlas (not a washed-out cloud).
-              const CAP = 180;
+              const CAP = forRegion ? 80 : 180;
               const ranked: { i: number; c: number }[] = [];
               for (let i = 0; i < m; i++) {
                 if (spikeCount[i] <= 0) continue;
@@ -486,18 +494,13 @@ export function MaleCnsBrainViz(props: {
                 ranked.push({ i, c: spikeCount[i] });
               }
               ranked.sort((a, b) => b.c - a.c);
-              // Paint spikes in the SELECTED region accent immediately
-              // (CX=cyan, MB=orchid, AL=lime) — never the old fixed rose.
-              // Why: tick() also paints accents, but applySpikes can land
-              // between frames and a rose write would flash hot-pink for 1 frame.
-              // Only flash particles inside the carved neuropil so glitter
-              // matches WHERE IT LIVES (scattered somas elsewhere stay dim).
               const hot = hotRoleFor(r);
               const [SR, SG, SB] =
                 hot >= 0
                   ? ROLE_RGB[hot]
                   : ([1.0, 0.22, 0.58] as [number, number, number]);
-              for (let k = 0; k < ranked.length && nextHot.length < CAP; k++) {
+              let added = 0;
+              for (let k = 0; k < ranked.length && added < CAP; k++) {
                 const p = map[ranked[k].i];
                 if (hot >= 0 && roles[p] !== hot) continue;
                 spikeTime[p] = nowMs;
@@ -505,6 +508,7 @@ export function MaleCnsBrainViz(props: {
                 colors[p * 3] = SR * 1.05;
                 colors[p * 3 + 1] = SG * 1.05;
                 colors[p * 3 + 2] = SB * 1.05;
+                added++;
               }
               hotSpikes = nextHot;
               colorAttr.needsUpdate = true;
@@ -524,7 +528,6 @@ export function MaleCnsBrainViz(props: {
         geometry.setAttribute("color", colorAttr);
 
         sprite = makeGlowSprite();
-        // Slightly larger than flychess's 0.028-on-12k so lobes read as one glitter mass.
         material = new THREE.PointsMaterial({
           size: 0.032,
           map: sprite,
@@ -538,11 +541,9 @@ export function MaleCnsBrainViz(props: {
 
         points = new THREE.Points(geometry, material);
         points.frustumCulled = false;
-        // Mild tip so optic lobes + central brain read as one compact silhouette.
         points.rotation.set(-0.28, 0.48, 0.06);
         scene.add(points);
 
-        // Frame the re-centered brain cloud so it fills the sidebar (no long cord).
         camera.position.set(0, 0.12, 3.55);
         controls!.target.set(0, 0.02, 0);
         controls!.update();
@@ -557,10 +558,7 @@ export function MaleCnsBrainViz(props: {
           const other = stage?.other ?? 0;
           const maxS = Math.max(1, ring, pfn, pfl, other);
 
-          // Soft stage activity — keep quiet so spikes + selected carving dominate.
-          // When a region is selected, crush EVERY other role's boost so additive
-          // blending can't light the whole atlas from stage totals alone.
-          const hot = hotRoleFor(selected);
+          const hots = hotRolesFor(selected, pathwayOn);
           const quiet = 0.04;
           roleTarget[ROLE_SENSORY] = quiet;
           roleTarget[ROLE_CX] = quiet;
@@ -569,18 +567,22 @@ export function MaleCnsBrainViz(props: {
           roleTarget[ROLE_OPTIC] = quiet * 0.8;
           roleTarget[ROLE_MB] = quiet;
           roleTarget[ROLE_AL] = quiet;
-          if (hot === ROLE_SENSORY) {
-            roleTarget[ROLE_SENSORY] = 0.22 + 0.28 * Math.min(1, ring / maxS);
-          } else if (hot === ROLE_CX) {
-            roleTarget[ROLE_CX] = 0.24 + 0.32 * Math.min(1, pfn / maxS);
-          } else if (hot === ROLE_MB) {
-            roleTarget[ROLE_MB] =
-              0.22 + 0.3 * Math.min(1, (pfn * 0.6 + ring * 0.4) / maxS);
-          } else if (hot === ROLE_AL) {
-            roleTarget[ROLE_AL] =
-              0.22 + 0.3 * Math.min(1, (ring * 0.7 + pfn * 0.3) / maxS);
-          } else if (!selected) {
-            // Idle / no region: soft whole-brain breath (picker idle only).
+
+          const boostRole = (role: number, base: number, amp: number) => {
+            if (hots.includes(role)) roleTarget[role] = base + amp;
+          };
+
+          if (hots.length > 0) {
+            boostRole(ROLE_CX, 0.24, 0.32 * Math.min(1, pfn / maxS));
+            boostRole(ROLE_MB, 0.22, 0.3 * Math.min(1, (pfn * 0.6 + ring * 0.4) / maxS));
+            boostRole(ROLE_AL, 0.22, 0.3 * Math.min(1, (ring * 0.7 + pfn * 0.3) / maxS));
+            // Pathway: ensure all three carves get a medium floor even if CX stages dominate.
+            if (pathwayOn) {
+              roleTarget[ROLE_AL] = Math.max(roleTarget[ROLE_AL], 0.28);
+              roleTarget[ROLE_MB] = Math.max(roleTarget[ROLE_MB], 0.28);
+              roleTarget[ROLE_CX] = Math.max(roleTarget[ROLE_CX], 0.3);
+            }
+          } else if (!selected && !pathwayOn) {
             roleTarget[ROLE_SENSORY] = 0.12 + 0.18 * Math.min(1, ring / maxS);
             roleTarget[ROLE_CX] = 0.14 + 0.2 * Math.min(1, pfn / maxS);
             roleTarget[ROLE_CENTRAL] = 0.1 + 0.12 * Math.min(1, pfn / maxS);
@@ -594,16 +596,18 @@ export function MaleCnsBrainViz(props: {
           if (boost) flash = Math.max(flash, 0.15);
         }
 
-        function setRegion(r: RegionKey | null) {
+        function setRegion(r: RegionKey | null, pathway?: boolean) {
           selected = r;
-          // Warm the neuron→particle mapping as soon as a region is picked so
-          // the first decision's spikes flash immediately, not one fetch late.
-          if (r) void mappingFor(r).catch(() => undefined);
+          if (pathway !== undefined) pathwayOn = pathway;
+          if (pathwayOn) {
+            void mappingFor("antennal_lobe").catch(() => undefined);
+            void mappingFor("mushroom_body").catch(() => undefined);
+            void mappingFor("central_complex").catch(() => undefined);
+          } else if (r) {
+            void mappingFor(r).catch(() => undefined);
+          }
         }
 
-        // Old pulse() snapped points.scale 1 → 1.12 → 1 with setTimeouts —
-        // that geometric pop every decision was the visible "hop in place".
-        // Now it's a pure brightness flash that decays exponentially in tick.
         function pulse() {
           flash = 1;
         }
@@ -611,8 +615,6 @@ export function MaleCnsBrainViz(props: {
         apiRef.current = { applyActivity, setRegion, pulse, applySpikes };
         setStatus("ready");
 
-        // Full pass each frame (~124k simple RGB ops is fine; a sliding chunk
-        // left stale bright colors so the whole brain looked lit forever).
         const count = atlas.count;
         let t0 = performance.now();
         let lastNow = t0;
@@ -635,15 +637,12 @@ export function MaleCnsBrainViz(props: {
           flash *= Math.exp(-dt * 3.2);
           const flashMul = 1 + 0.08 * flash;
           // Region focus cross-fade (selection changes never pop).
-          focusT += ((selected ? 1 : 0) - focusT) * Math.min(1, dt * 4);
+          focusT += ((selected || pathwayOn ? 1 : 0) - focusT) * Math.min(1, dt * 4);
 
-          const hotRole = hotRoleFor(selected);
-          // Soft breath on the selected carving only (not the whole brain).
-          // Keep gain modest so AdditiveBlending doesn't wash CX cyan → white.
+          const hots = hotRolesFor(selected, pathwayOn);
           const hotPulse = 1 + 0.08 * Math.sin(t * 1.5);
           const hotGain = 1 + 0.28 * focusT;
-          // Always dim the non-selected atlas hard once a region is picked.
-          const dimAmt = selected ? Math.max(focusT, 0.92) : 0;
+          const dimAmt = selected || pathwayOn ? Math.max(focusT, 0.92) : 0;
 
           for (let i = 0; i < count; i++) {
             const role = roles[i];
@@ -651,14 +650,12 @@ export function MaleCnsBrainViz(props: {
             let bg = baseColors[i * 3 + 1];
             let bb = baseColors[i * 3 + 2];
             let a: number;
-            if (role === hotRole && selected) {
-              // Selected carving: medium accent glow (spikes are brighter still).
+            if (hots.includes(role)) {
               br += (accentColors[i * 3] - br) * focusT;
               bg += (accentColors[i * 3 + 1] - bg) * focusT;
               bb += (accentColors[i * 3 + 2] - bb) * focusT;
               a = roleBoost[role] * flashMul * hotPulse * hotGain;
             } else {
-              // Rest of brain: very dim silhouette so magenta spikes pop.
               const wave = 0.5 + 0.5 * Math.sin(t * speeds[i] + phases[i]);
               const sparkle = 0.92 + 0.08 * wave;
               const dim = 1 + (focusDim(role) - 1) * dimAmt;
@@ -668,14 +665,8 @@ export function MaleCnsBrainViz(props: {
             colors[i * 3 + 1] = bg * a;
             colors[i * 3 + 2] = bb * a;
           }
-          // Spike pops use the SELECTED region accent (CX=cyan, MB=orchid,
-          // AL=lime) — not a fixed rose — so glitter matches WHERE IT LIVES.
-          // Keep gain modest: AdditiveBlending + >1.0 RGB washes any hue to white.
           const SPIKE_TAU = 480;
           const SPIKE_GAIN = 0.95;
-          const hot = hotRoleFor(selected);
-          const [SR, SG, SB] =
-            hot >= 0 ? ROLE_RGB[hot] : ([1.0, 0.22, 0.58] as [number, number, number]);
           for (let h = 0; h < hotSpikes.length; h++) {
             const i = hotSpikes[h];
             const st = spikeTime[i];
@@ -683,6 +674,8 @@ export function MaleCnsBrainViz(props: {
             const g = Math.exp(-(now - st) / SPIKE_TAU);
             if (g < 0.04) continue;
             const wg = g * SPIKE_GAIN;
+            const role = roles[i];
+            const [SR, SG, SB] = ROLE_RGB[role] ?? ([1.0, 0.22, 0.58] as [number, number, number]);
             colors[i * 3] = Math.min(1.05, wg * SR);
             colors[i * 3 + 1] = Math.min(1.05, wg * SG);
             colors[i * 3 + 2] = Math.min(1.05, wg * SB);
@@ -734,8 +727,14 @@ export function MaleCnsBrainViz(props: {
       return;
     }
     api.applyActivity(diag.stageSpikes, true);
-    // Light the exact neurons that fired this decision (not just region glow).
-    api.applySpikes(diag.spikeCount);
+    const stages = (diag as { stageResults?: Record<RegionKey, StepResult> }).stageResults;
+    if (pathwayMode && stages) {
+      api.applySpikes(stages.antennal_lobe.spikeCount, "antennal_lobe");
+      api.applySpikes(stages.mushroom_body.spikeCount, "mushroom_body");
+      api.applySpikes(stages.central_complex.spikeCount, "central_complex");
+    } else {
+      api.applySpikes(diag.spikeCount);
+    }
     const key =
       (diag.stageSpikes.ring ?? 0) +
       (diag.stageSpikes.pfn ?? 0) * 1_000 +
@@ -745,7 +744,7 @@ export function MaleCnsBrainViz(props: {
       lastPulseKey.current = key;
       api.pulse();
     }
-  }, [diag]);
+  }, [diag, pathwayMode]);
 
   return (
     <div

@@ -28,6 +28,9 @@ const REGION_BLURB: Record<RegionKey, string> = {
   antennal_lobe: "The fly's smell / sensory relay center",
 };
 
+const PATHWAY_BLURB =
+  "Soft AL→MB→CX cascade of frozen MaleCNS wiring (+ look-ahead when live)";
+
 /**
  * External anatomy explorers (open in a new tab).
  * The in-panel particle cloud is a real MaleCNS brain soma atlas (CC BY 4.0)
@@ -108,6 +111,23 @@ export const REGION_STATS: Record<
   central_complex: { neurons: 2950, connections: 402394, matchPct: 95.8 },
   mushroom_body: { neurons: 4501, connections: 860814, matchPct: 95.6 },
   antennal_lobe: { neurons: 3783, connections: 423980, matchPct: 96.8 },
+};
+
+/** Summed AL+MB+CX for pathway card / panel. */
+export const PATHWAY_STATS = {
+  neurons:
+    REGION_STATS.antennal_lobe.neurons +
+    REGION_STATS.mushroom_body.neurons +
+    REGION_STATS.central_complex.neurons,
+  connections:
+    REGION_STATS.antennal_lobe.connections +
+    REGION_STATS.mushroom_body.connections +
+    REGION_STATS.central_complex.connections,
+  matchPct:
+    (REGION_STATS.antennal_lobe.matchPct +
+      REGION_STATS.mushroom_body.matchPct +
+      REGION_STATS.central_complex.matchPct) /
+    3,
 };
 
 function useSpringedValue(value: number) {
@@ -275,12 +295,24 @@ export function BrainPanel(props: {
   label: string;
   diag: StepResult | null;
   nSteps?: number;
-  /** When true, region LIF is choosing moves; viz still shows full-brain glow. */
+  /** When true, connectome is in the decision loop (pathway hybrid or ablation LIF). */
   liveBrain?: boolean;
+  /** Soft AL→MB→CX cascade — multi-region atlas glow. */
+  pathwayMode?: boolean;
+  playMode?: string;
 }) {
-  const { regionKey, label, diag, nSteps = 6, liveBrain = false } = props;
-  const stats = REGION_STATS[regionKey];
+  const {
+    regionKey,
+    label,
+    diag,
+    nSteps = 6,
+    liveBrain = false,
+    pathwayMode = false,
+  } = props;
+  const stats = pathwayMode ? PATHWAY_STATS : REGION_STATS[regionKey];
   const spikes = diag?.stageSpikes;
+  const headerBlurb = pathwayMode ? PATHWAY_BLURB : REGION_BLURB[regionKey];
+  const headerTitle = pathwayMode ? "Full pathway" : label;
 
   return (
     <div
@@ -315,7 +347,7 @@ export function BrainPanel(props: {
               textTransform: "uppercase",
             }}
           >
-            Brain region
+            Brain mode
           </div>
           <div
             style={{
@@ -326,10 +358,10 @@ export function BrainPanel(props: {
               lineHeight: 1.15,
             }}
           >
-            {label}
+            {headerTitle}
           </div>
           <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 1 }}>
-            {REGION_BLURB[regionKey]}
+            {headerBlurb}
           </div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -409,6 +441,7 @@ export function BrainPanel(props: {
               diag={diag}
               liveBrain={liveBrain}
               region={regionKey}
+              pathwayMode={pathwayMode}
               idleAnim
             />
           </div>
@@ -432,9 +465,17 @@ export function BrainPanel(props: {
           <LegendDot color="#ff59bf" label="Spiking" />
           <LegendDot color="#0dd4ff" label="Optic" />
           <LegendDot color="#ffb82e" label="Central" />
-          <LegendDot color="#73ebff" label="CX" hot={regionKey === "central_complex"} />
-          <LegendDot color="#ff6bf2" label="Mushroom body" hot={regionKey === "mushroom_body"} />
-          <LegendDot color="#8cff59" label="Antennal lobe" hot={regionKey === "antennal_lobe"} />
+          <LegendDot color="#73ebff" label="CX" hot={pathwayMode || regionKey === "central_complex"} />
+          <LegendDot
+            color="#ff6bf2"
+            label="Mushroom body"
+            hot={pathwayMode || regionKey === "mushroom_body"}
+          />
+          <LegendDot
+            color="#8cff59"
+            label="Antennal lobe"
+            hot={pathwayMode || regionKey === "antennal_lobe"}
+          />
           <LegendDot color="#59f2d9" label="Sensory" />
           <LegendDot color="#ff8c1f" label="Motor / descending" />
         </div>
@@ -457,7 +498,7 @@ export function BrainPanel(props: {
             }}
           >
             this decision · {nSteps} simulation steps
-            {!liveBrain ? " · viz from region LIF (bot chooses moves)" : ""}
+            {!liveBrain ? " · viz from LIF (bot chooses moves)" : ""}
           </div>
         </div>
       )}
@@ -580,11 +621,11 @@ export function BrainPanel(props: {
         >
           Real MaleCNS brain soma positions (CC BY 4.0) — optic / central /
           descending only; VNC cord cropped because CX / MB / AL live in the
-          brain. Cyan/gold glow maps activity from the selected region LIF (
-          {stats.neurons.toLocaleString()} neurons) when running. Controller may
-          be region LIF or the strong bot; pitch owns that distinction. The
-          button below opens the real EM dataset with this region's neuropils
-          highlighted — anatomy reference, not the live controller.
+          brain. Glow maps LIF activity (
+          {stats.neurons.toLocaleString()} neurons
+          {pathwayMode ? " across AL+MB+CX" : ""}
+          ). Live pathway: soft cascade + look-ahead search. Ablations: one region
+          LIF only. Neuroglancer below is anatomy reference, not the live controller.
         </p>
         {/* Region-aware hero link: curated camera + only this region's neuropils */}
         <a
@@ -596,7 +637,8 @@ export function BrainPanel(props: {
         >
           <span aria-hidden>🔬</span>
           <span>
-            EXPLORE {label.toUpperCase()} IN NEUROGLANCER — REAL EM, REGION
+            EXPLORE {pathwayMode ? "CENTRAL COMPLEX" : label.toUpperCase()} IN
+            NEUROGLANCER — REAL EM, REGION
             HIGHLIGHTED
           </span>
         </a>

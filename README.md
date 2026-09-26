@@ -2,8 +2,9 @@
 
 **HackGT 13** — Oracle of the Deep (main track) + Tiger Data / SpaceXAI / Vultr sponsor challenges.
 
-> A real fruit fly brain region — frozen MaleCNS v1.0 wiring, not an LLM —
-> plays split-screen voxel Crossy Road against you.
+> Soft AL→MB→CX cascade of frozen MaleCNS wiring + look-ahead search —
+> a Fly Chess–style hybrid — plays split-screen voxel Crossy Road against you.
+> Not an LLM.
 
 **Judging day:** [DEMO.md](DEMO.md) (60-second stranger walkthrough) · [FALLBACK.md](FALLBACK.md) (offline `app/dist` + screen-record plan)
 
@@ -12,34 +13,40 @@
 | Side | Who |
 |------|-----|
 | Left | You (↑←→ / WASD — no hop-back) |
-| Right | A real Drosophila brain region controlling the fly |
+| Right | Pathway hybrid (default) or a single-region ablation |
 
-Before each round you pick which **real** region plays:
+Before each round you pick how the fly thinks:
 
-- **Central Complex** (hero) — navigation / steering. Ring → PFN → PFL.
-- **Mushroom Body** — learning / memory. Kenyon cells → MBONs.
-- **Antennal Lobe** — smell. ORNs → PNs.
-
-Each is a separately trained model on that region's own sub-wiring. This is
-not a difficulty slider.
+- **Full pathway AL→MB→CX** (Recommended) — three frozen MaleCNS regions
+  chained each decision; look-ahead search picks a legal hop. Hard for humans;
+  atlas lights AL + MB + CX together.
+- **Ablation · CX / MB / AL** — one region LIF only (no search). Science
+  contrast vs the full pathway; not the main pitch.
 
 ### Honesty constraint
 
-Only the selected region's neurons are simulated (a few thousand cells),
-**not** the whole 166,700-neuron brain. The live panel is labeled that way on
-purpose.
+Default Live mode is a **soft cascade of three real regions** (~11k neurons),
+not the whole 166,700-neuron brain and not anatomical AL↔MB↔CX edges (those are
+not in our `fetch_connectome` extracts). Ablation cards stay single-region so
+you can still show “wiring matters” cleanly. Uncheck Live for pure look-ahead
+(still strong).
 
 ## Architecture (the BeatTheFly recipe)
 
 1. Load MaleCNS connectivity, signed by predicted neurotransmitter (Dale's law).
-2. **Freeze** that wiring forever.
+2. **Freeze** that wiring forever (per region: CX / MB / AL).
 3. Train only: linear encoder (+ LayerNorm), per-neuron leak/threshold/reset,
    linear decoder from the output population's voltages → `{stay, forward, left, right}`.
 4. Neuron model: leaky integrate-and-fire (LIF), ~6–12 steps per decision.
-5. Training: imitation of a scripted bot (fast, stable). Ablations
+5. **Live pathway (default):** AL gets real `observe()` → softObs (softmax logits
+   into next 16-D) → MB → softObs → CX → probs bias look-ahead (`scriptedBot`
+   prior). Search still enforces legal/safe hops.
+6. Training: imitation of a scripted bot (fast, stable). Ablations
    (shuffle / zero W) in `brain/evaluate.py` show the wiring matters.
 
 Browser inference is pure TypeScript (no server required for the game loop).
+Shipped checkpoints under `app/public/regions/` — no retrain required for the
+pathway hybrid glue.
 
 ## Quick start (demo)
 
@@ -58,15 +65,15 @@ CSS/WebGL changes load. The game pane is exactly 50/50 YOU | FLY; the
 sidebar sits beside it and does not steal half the canvas.
 
 If region weight files are missing under `app/public/regions/`, the fly falls
-back to the scripted bot so the demo still runs. Central Complex weights ship
-in-repo after `export.py`; MB/AL may need a quick train (see below).
+back to the scripted bot so the demo still runs. CX / MB / AL weights ship
+in-repo under `app/public/regions/` for the pathway hybrid.
 
 **Attract mode:** the picker screen runs two scripted bots behind the cards so
 judges see motion before anyone clicks. Step-by-step clicks + pitch: [DEMO.md](DEMO.md).
 
 **Offline fallback:** full checklist in [FALLBACK.md](FALLBACK.md) —
-`cd app && npm run build`, serve `app/dist/`, and keep a CX screen recording
-with the neuron panel visible in case venue Wi-Fi dies.
+`cd app && npm run build`, serve `app/dist/`, and keep a pathway hybrid screen
+recording with the atlas panel visible in case venue Wi-Fi dies.
 
 ## Rebuild brain weights
 
@@ -117,21 +124,23 @@ The brain only sees `observe(world)` and emits a 4-way action.
   https://male-cns.janelia.org/download/ instead.
 - Sidebar brain viz uses a **MaleCNS v1.0 soma-position atlas** (CC BY 4.0; same
   creators). Binaries live under `app/public/data/brain-atlas/` with `NOTICE.md`.
-  Controllers remain region-scoped; the particle cloud is a full-atlas *display*.
-  Visual language (additive glow sprites, cyan/gold groups) adapted from public
-  lab demos including [flychess-hq](https://flychess-hq.vercel.app/) and
+  Controllers: pathway hybrid lights AL+MB+CX; ablations light one carve.
+  The particle cloud is a full-atlas *display*. Visual language (additive glow
+  sprites, cyan/gold groups) adapted from public lab demos including
+  [flychess-hq](https://flychess-hq.vercel.app/) and
   [Fly Chess Lab](https://tolatolatop.github.io/fly-chess/).
 - Official MaleCNS project / cell-type explorer: https://male-cns.janelia.org/
 - Cell-type explorer source (regions, morphology, connectivity docs):
   https://github.com/reiserlab/celltype-explorer-drosophila-male-cns
 - Community map of sibling fly-connectome demos (Doom, Flappy, Dino, …):
   https://github.com/cobanov/awesome-fly — useful for “how do others stay honest
-  about circuit subsets?” We stay region-only on the *controller* on purpose.
+  about circuit subsets?” We stay pathway / region-scoped on the *controller*
+  on purpose.
 - Game code in this repo: MIT (derived in spirit from EvanBacon/Expo-Crossy-Road,
   rebuilt as a web-only Vite app for reliable split-screen demos).
 
 ## Recorded fallback
 
-See [FALLBACK.md](FALLBACK.md). Before judging, record a strong Central Complex
-run (OBS / Win+G) with the neuron panel visible, and keep `npm run build`
+See [FALLBACK.md](FALLBACK.md). Before judging, record a strong pathway hybrid
+run (OBS / Win+G) with the atlas panel visible, and keep `npm run build`
 output under `app/dist/` so you can serve it fully offline.
