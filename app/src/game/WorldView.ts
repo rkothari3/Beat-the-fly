@@ -239,10 +239,9 @@ export class WorldView {
       this.flyFacingReady = true;
       fly.tickWings();
     } else {
-      (this.playerMesh as HumanCharacter).updateFacingFromPosition(
-        world.playerX,
-        world.playerZ
-      );
+      const human = this.playerMesh as HumanCharacter;
+      human.updateFacingFromPosition(world.playerX, world.playerZ);
+      human.tickWalk();
     }
 
     // Expo GameEngine.forwardScene — ease the world so lookAt stays on the path.

@@ -36,6 +36,13 @@ const NG_BASE = "https://neuroglancer-demo.appspot.com/#!";
 export const NEUROGLANCER_FULL_URL =
   "https://neuroglancer-demo.appspot.com/#!gs://flyem-male-cns/v1.0/male-cns-v1.0.json";
 
+/**
+ * AL + MB + CX together (Learn “Regions” still / click-through).
+ * Green AL · pink MB · cyan CX · faint brain shell; no yellow bounds.
+ */
+export const NEUROGLANCER_PATHWAY_URL =
+  "https://neuroglancer-demo.appspot.com/#!%7B%22title%22:%22MaleCNS%20v1.0%20%E2%80%94%20AL%20+%20MB%20+%20CX%20%C2%B7%20Beat%20the%20Fly%20%28screenshot%29%22%2C%22dimensions%22:%7B%22x%22:%5B8e-9%2C%22m%22%5D%2C%22y%22:%5B8e-9%2C%22m%22%5D%2C%22z%22:%5B8e-9%2C%22m%22%5D%7D%2C%22position%22:%5B48068%2C22000%2C25000%5D%2C%22crossSectionScale%22:30%2C%22projectionScale%22:75000%2C%22layers%22:%5B%7B%22type%22:%22image%22%2C%22source%22:%22precomputed://gs://flyem-male-cns/em/em-clahe-jpeg%22%2C%22tab%22:%22source%22%2C%22name%22:%22em-clahe%22%2C%22visible%22:false%7D%2C%7B%22type%22:%22segmentation%22%2C%22source%22:%22precomputed://gs://flyem-male-cns/rois/fullbrain-major-shells%22%2C%22pick%22:false%2C%22tab%22:%22source%22%2C%22selectedAlpha%22:0%2C%22saturation%22:0%2C%22meshSilhouetteRendering%22:7%2C%22segments%22:%5B%221%22%2C%222%22%2C%223%22%5D%2C%22segmentDefaultColor%22:%22#ffffff%22%2C%22name%22:%22brain-shell%22%7D%2C%7B%22type%22:%22segmentation%22%2C%22source%22:%22precomputed://gs://flyem-male-cns/rois/fullbrain-roi-v5%22%2C%22pick%22:false%2C%22tab%22:%22segments%22%2C%22objectAlpha%22:0.92%2C%22segments%22:%5B%221%22%2C%222%22%2C%2215%22%2C%2216%22%2C%2251%22%2C%2252%22%2C%2277%22%2C%2278%22%2C%2279%22%2C%2280%22%2C%2281%22%2C%2282%22%2C%2283%22%2C%2284%22%2C%2285%22%2C%2286%22%2C%2221%22%2C%2224%22%2C%2249%22%2C%2250%22%5D%2C%22segmentColors%22:%7B%221%22:%22#8cff59%22%2C%222%22:%22#8cff59%22%2C%2215%22:%22#ff6bf2%22%2C%2216%22:%22#ff6bf2%22%2C%2221%22:%22#73ebff%22%2C%2224%22:%22#73ebff%22%2C%2249%22:%22#73ebff%22%2C%2250%22:%22#73ebff%22%2C%2251%22:%22#ff6bf2%22%2C%2252%22:%22#ff6bf2%22%2C%2277%22:%22#ff6bf2%22%2C%2278%22:%22#ff6bf2%22%2C%2279%22:%22#ff6bf2%22%2C%2280%22:%22#ff6bf2%22%2C%2281%22:%22#ff6bf2%22%2C%2282%22:%22#ff6bf2%22%2C%2283%22:%22#ff6bf2%22%2C%2284%22:%22#ff6bf2%22%2C%2285%22:%22#ff6bf2%22%2C%2286%22:%22#ff6bf2%22%7D%2C%22name%22:%22AL%20%28green%29%20%C2%B7%20MB%20%28pink%29%20%C2%B7%20CX%20%28cyan%29%22%7D%5D%2C%22showAxisLines%22:false%2C%22showScaleBar%22:false%2C%22showDefaultAnnotations%22:false%2C%22showSlices%22:false%2C%22layout%22:%223d%22%2C%22uiControlVisibility%22:%7B%7D%7D";
+
 interface RegionView {
   /** Human name baked into the Neuroglancer tab title. */
   title: string;

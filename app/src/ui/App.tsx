@@ -1,9 +1,8 @@
 /**
  * Main demo UI — live match chrome + pathway / region picker overlay.
  *
- * Live pathway (default science mode): AL→MB→CX LIF scores moves, brain-weighted
- * look-ahead search picks the hop (Fly Chess hybrid, priorStrength 18).
- * Single-region = ablation LIF-only.
+ * Live pathway (default science mode): AL→MB→CX LIF scores moves, look-ahead
+ * search picks the hop (Fly Chess hybrid). Single-region = ablation LIF-only.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -13,12 +12,12 @@ import { scriptedBot } from "../core/scriptedBot";
 import { SplitScreen } from "../game/SplitScreen";
 import { preloadCrossyAssets } from "../game/CrossyAssets";
 import { preloadFlyModel } from "../game/characters/FlyCharacter";
+import { preloadHumanModel } from "../game/characters/HumanCharacter";
 import { LifEngine, loadRegion, RegionKey, StepResult } from "../brain/LifEngine";
 import { PathwayEngine, PlayMode, isPathway, isRegionKey } from "../brain/PathwayEngine";
 import { BrainPanel } from "./BrainPanel";
 import { RegionPicker, PLAY_MODES, FlyOpponent } from "./RegionPicker";
 import { ResultsScreen } from "./ResultsScreen";
-import { LearnPanel } from "./LearnPanel";
 import { TopBar, ViewportPill } from "./TopBar";
 import {
   LeaderEntry,
@@ -29,7 +28,7 @@ import {
   savePlayerName,
 } from "./leaderboard";
 
-type Phase = "picker" | "learn" | "playing" | "results";
+type Phase = "picker" | "playing" | "results";
 /**
  * Live decision source for the fly.
  * "bot" = look-ahead only.
@@ -63,7 +62,6 @@ export function App() {
   const pendingHuman = useRef<Action | null>(null);
 
   const [phase, setPhase] = useState<Phase>("picker");
-  const [learnBeatIndex, setLearnBeatIndex] = useState(0);
   const [playMode, setPlayMode] = useState<PlayMode>("pathway");
   const [controller, setController] = useState<FlyController>("bot");
   const [opponent, setOpponent] = useState<FlyOpponent>("brain");
@@ -85,6 +83,9 @@ export function App() {
     );
     void preloadFlyModel().catch((e) =>
       console.error("[fly] preload failed", e)
+    );
+    void preloadHumanModel().catch((e) =>
+      console.error("[human] preload failed", e)
     );
   }, []);
 
@@ -264,7 +265,7 @@ export function App() {
             const eng = engineRef.current;
 
             if (controller === "brain" && path && isPathway(playMode)) {
-              // Hybrid: pathway scores nudge look-ahead (brain-weighted priorStrength 18).
+              // Hybrid: pathway scores nudge look-ahead (priorStrength 13).
               const result = path.step(observe(fly));
               action = scriptedBot(fly, {
                 prior: result.probs,
@@ -332,7 +333,7 @@ export function App() {
             split.fly.reset();
           }
         }
-      } else if (phase === "picker" || phase === "learn") {
+      } else if (phase === "picker") {
         acc += dt;
         decisionAcc += dt * 1000;
         const worldDt = human.dt;
@@ -406,10 +407,17 @@ export function App() {
   }
 
   const modeMeta = useMemo(
-    () => PLAY_MODES.find((r) => r.key === playMode)!,
+    () =>
+      PLAY_MODES.find((r) => r.key === playMode) ?? {
+        key: "pathway" as const,
+        label: "Full pathway AL→MB→CX",
+        short: "PATH",
+        category: "MALECNS PATHWAY",
+        blurb: "Frozen MaleCNS pathway hybrid.",
+      },
     [playMode]
   );
-  const showOverlay = phase === "picker" || phase === "learn" || phase === "results";
+  const showOverlay = phase === "picker" || phase === "results";
   const pathwayMode = isPathway(playMode);
   const vizRegion: RegionKey | undefined = isRegionKey(playMode) ? playMode : undefined;
 
@@ -650,18 +658,9 @@ export function App() {
                 onPlayAgain={() => startRound("pathway", "brain")}
                 onBackHome={() => setPhase("picker")}
               />
-            ) : phase === "learn" ? (
-              <LearnPanel
-                initialIndex={learnBeatIndex}
-                onBack={() => setPhase("picker")}
-              />
             ) : (
               <RegionPicker
                 onPick={(r, op) => startRound(r, op)}
-                onLearn={(beatIndex = 0) => {
-                  setLearnBeatIndex(beatIndex);
-                  setPhase("learn");
-                }}
                 playerName={playerName}
                 onPlayerName={updatePlayerName}
                 board={board}

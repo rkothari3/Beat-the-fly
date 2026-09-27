@@ -64,7 +64,6 @@ export type CrossyKit = {
   cars: THREE.Group[];
   /** Hitbox length along drive axis — same index as `cars`. */
   carWidths: number[];
-  chicken: THREE.Group;
 };
 
 let kitPromise: Promise<CrossyKit> | null = null;
@@ -116,10 +115,6 @@ export function preloadCrossyAssets(): Promise<CrossyKit> {
       )
     );
     const carWidths = cars.map(measureVehicleWidth);
-    const chicken = await loadTexturedObj(
-      `${BASE}/chicken/0.obj`,
-      `${BASE}/chicken/0.png`
-    );
 
     setVehicleHitWidths(carWidths);
 
@@ -131,13 +126,11 @@ export function preloadCrossyAssets(): Promise<CrossyKit> {
       trees,
       cars,
       carWidths,
-      chicken,
     };
     console.log("[crossy] MagicaVoxel kit ready", {
       trees: trees.length,
       cars: cars.length,
       carWidths,
-      chicken: true,
     });
     return kit;
   })().catch((err) => {

@@ -40,7 +40,7 @@ export interface BotOptions {
    * Biases root action values by priorStrength * log(prior[a] + eps).
    */
   prior?: Float32Array | number[];
-  /** Weight on log-prior at the root (default 18 — brain-weighted hybrid). */
+  /** Weight on log-prior at the root (default 13). */
   priorStrength?: number;
 }
 
@@ -198,7 +198,7 @@ export function scriptedBot(world: LaneWorld, opts?: BotOptions): Action {
 
   const depth = depthFor(opts);
   const ticks = opts?.ticksPerDecision ?? BOT_TICKS_PER_DECISION;
-  const priorStrength = opts?.priorStrength ?? 18;
+  const priorStrength = opts?.priorStrength ?? 13;
 
   world.ensureLookAhead(depth + 4);
 
