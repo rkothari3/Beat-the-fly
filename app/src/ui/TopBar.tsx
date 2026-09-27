@@ -26,11 +26,20 @@ export function TopBar({
   flyScore,
   timeLeft,
   roundSeconds,
+  showScoreboard = true,
+  flyScoreOnly = false,
+  showTimer = true,
 }: {
   humanScore: number;
   flyScore: number;
   timeLeft: number;
   roundSeconds: number;
+  /** Hide YOU/FLY chip on the home (picker) screen. */
+  showScoreboard?: boolean;
+  /** Spectate mode: only show the fly's score. */
+  flyScoreOnly?: boolean;
+  /** Hide clock + bar (home + infinite spectate). */
+  showTimer?: boolean;
 }) {
   const mins = Math.floor(timeLeft / 60);
   const secs = Math.ceil(timeLeft % 60);
@@ -75,6 +84,7 @@ export function TopBar({
           flexDirection: "column",
           alignItems: "center",
           gap: 2,
+          visibility: showScoreboard ? "visible" : "hidden",
         }}
       >
         <div
@@ -89,7 +99,9 @@ export function TopBar({
             boxShadow: "var(--shadow-card)",
           }}
         >
-          <ScoreChip color="var(--accent-you)" label="YOU" value={humanScore} />
+          {!flyScoreOnly && (
+            <ScoreChip color="var(--accent-you)" label="YOU" value={humanScore} />
+          )}
           <ScoreChip color="var(--accent-fly)" label="FLY" value={flyScore} />
         </div>
         <div
@@ -100,11 +112,17 @@ export function TopBar({
             letterSpacing: "0.04em",
           }}
         >
-          rows crossed
+          {flyScoreOnly ? "watching · rows crossed" : "rows crossed"}
         </div>
       </div>
 
-      <div style={{ justifySelf: "end", textAlign: "right" }}>
+      <div
+        style={{
+          justifySelf: "end",
+          textAlign: "right",
+          visibility: showTimer ? "visible" : "hidden",
+        }}
+      >
         <div
           style={{
             fontFamily: "var(--font-mono)",
@@ -143,7 +161,6 @@ export function TopBar({
               height: "100%",
               background: "var(--accent-teal)",
               borderRadius: "var(--radius-pill)",
-              // Cheap CSS transition smooths the 1 Hz clock updates.
               transition: "width 0.3s linear",
             }}
           />

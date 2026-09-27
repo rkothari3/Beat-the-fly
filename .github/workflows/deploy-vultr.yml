@@ -1,0 +1,44 @@
+# Deploy Beat the Fly to Vultr on every push to main.
+#
+# Required GitHub Actions secrets (Settings → Secrets → Actions):
+#   VULTR_HOST     — e.g. 66.42.90.228
+#   VULTR_SSH_KEY  — private key whose public half is in root@host ~/.ssh/authorized_keys
+#
+# Server must already have: Node 22, nginx, pm2, repo at /var/www/beat-the-fly,
+# and server/.env with DATABASE_URL (Tiger). Never put DB passwords in this workflow.
+
+name: Deploy to Vultr
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vultr
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VULTR_HOST }}
+          username: root
+          key: ${{ secrets.VULTR_SSH_KEY }}
+          script_stop: true
+          # Pull + build on the box (region bins live in the repo; Tiger .env stays on server).
+          script: |
+            set -e
+            cd /var/www/beat-the-fly
+            if [ ! -d .git ]; then
+              echo "ERROR: /var/www/beat-the-fly is not a git checkout. Bootstrap once on the server."
+              exit 1
+            fi
+            git fetch origin main
+            git reset --hard origin/main
+            sed -i 's/\r$//' scripts/deploy-vultr.sh
+            chmod +x scripts/deploy-vultr.sh
+            VITE_API_URL=https://www.beattheflyapp.tech ./scripts/deploy-vultr.sh

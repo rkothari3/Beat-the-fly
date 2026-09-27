@@ -261,8 +261,20 @@ export function MaleCnsBrainViz(props: {
   /** Light AL + MB + CX carves together (pathway hybrid). */
   pathwayMode?: boolean;
   idleAnim?: boolean;
+  /**
+   * Cascade stage from BrainPanel (0=AL, 1=MB, 2=CX, -1=idle).
+   * Why: UI meters and atlas flash the same left→right story on each decision.
+   */
+  cascadeStage?: number;
 }) {
-  const { diag, liveBrain, region, pathwayMode = false, idleAnim = true } = props;
+  const {
+    diag,
+    liveBrain,
+    region,
+    pathwayMode = false,
+    idleAnim = true,
+    cascadeStage = -1,
+  } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const apiRef = useRef<{
@@ -271,12 +283,15 @@ export function MaleCnsBrainViz(props: {
     pulse: () => void;
     /** Flash the exact atlas particles whose region neurons spiked this step. */
     applySpikes: (spikeCount: Float32Array, forRegion?: RegionKey) => void;
+    /** Extra bloom while cascade stage is active (thinking marketing). */
+    setCascadeBoost: (stage: number) => void;
   } | null>(null);
   const lastPulseKey = useRef(0);
   const liveRef = useRef(liveBrain);
   const idleRef = useRef(idleAnim);
   const regionRef = useRef<RegionKey | null>(region ?? null);
   const pathwayRef = useRef(pathwayMode);
+  const cascadeTimers = useRef<number[]>([]);
 
   useEffect(() => {
     liveRef.current = liveBrain;
@@ -344,7 +359,10 @@ export function MaleCnsBrainViz(props: {
     roleBoost.fill(0.18);
     roleTarget.fill(0.18);
     // Decision flash: decaying scalar (no geometry scale-pop — see pulse()).
+    // Stronger/longer than before so judges see a clear “thinking” bloom.
     let flash = 0;
+    // Soft extra boost on the cascade-active role (AL then MB then CX).
+    const cascadeBoost = new Float32Array(ROLE_COUNT);
     // 0 → 1 ease when a region is selected; drives tint + dim contrast.
     let focusT = regionRef.current || pathwayRef.current ? 1 : 0;
     let selected: RegionKey | null = regionRef.current;
@@ -476,46 +494,42 @@ export function MaleCnsBrainViz(props: {
           return map;
         };
 
-        function applySpikes(spikeCount: Float32Array, forRegion?: RegionKey) {
-          const r = forRegion ?? selected;
-          if (!r) return;
-          void mappingFor(r)
-            .then((map) => {
-              if (disposed) return;
-              const nowMs = performance.now();
-              const nextHot: number[] =
-                forRegion && forRegion !== "antennal_lobe" ? [...hotSpikes] : [];
-              const m = Math.min(map.length, spikeCount.length);
-              const CAP = forRegion ? 80 : 180;
-              const ranked: { i: number; c: number }[] = [];
-              for (let i = 0; i < m; i++) {
-                if (spikeCount[i] <= 0) continue;
-                if (map[i] < 0) continue;
-                ranked.push({ i, c: spikeCount[i] });
-              }
-              ranked.sort((a, b) => b.c - a.c);
-              const hot = hotRoleFor(r);
-              const [SR, SG, SB] =
-                hot >= 0
-                  ? ROLE_RGB[hot]
-                  : ([1.0, 0.22, 0.58] as [number, number, number]);
-              let added = 0;
-              for (let k = 0; k < ranked.length && added < CAP; k++) {
-                const p = map[ranked[k].i];
-                if (hot >= 0 && roles[p] !== hot) continue;
-                spikeTime[p] = nowMs;
-                nextHot.push(p);
-                colors[p * 3] = SR * 1.05;
-                colors[p * 3 + 1] = SG * 1.05;
-                colors[p * 3 + 2] = SB * 1.05;
-                added++;
-              }
-              hotSpikes = nextHot;
-              colorAttr.needsUpdate = true;
-            })
-            .catch((err) => {
-              if (!abort.signal.aborted) console.error(err);
-            });
+        /** Which pathway carve is currently “thinking” (−1 = none). */
+        let activeCascadeRole = -1;
+        let lastResparkMs = 0;
+
+        /** Insanely bright sparse pops in ONE neuropil — active cascade only. */
+        function sparkRole(role: number, n: number) {
+          const nowMs = performance.now();
+          const pool: number[] = [];
+          for (let i = 0; i < roles.length; i++) {
+            if (roles[i] === role) pool.push(i);
+          }
+          if (pool.length === 0) return;
+          const [SR, SG, SB] = ROLE_RGB[role];
+          // Clear previous stage's sparks so only the active carve twinkles.
+          hotSpikes = [];
+          const take = Math.min(n, pool.length);
+          for (let k = 0; k < take; k++) {
+            const j = (Math.random() * pool.length) | 0;
+            const p = pool[j];
+            pool[j] = pool[pool.length - 1];
+            pool.pop();
+            spikeTime[p] = nowMs;
+            hotSpikes.push(p);
+            // Near-white hot core + role tint — additive blending needs huge values.
+            colors[p * 3] = Math.min(4.5, 2.2 + SR * 3.2);
+            colors[p * 3 + 1] = Math.min(4.5, 2.2 + SG * 3.2);
+            colors[p * 3 + 2] = Math.min(4.5, 2.2 + SB * 3.2);
+          }
+          lastResparkMs = nowMs;
+          colorAttr.needsUpdate = true;
+        }
+
+        function applySpikes(_spikeCount: Float32Array, forRegion?: RegionKey) {
+          // Sparks are driven by cascade stage (setCascadeBoost), not bulk spikes.
+          void _spikeCount;
+          void forRegion;
         }
 
         geometry = new THREE.BufferGeometry();
@@ -572,16 +586,17 @@ export function MaleCnsBrainViz(props: {
             if (hots.includes(role)) roleTarget[role] = base + amp;
           };
 
-          if (hots.length > 0) {
-            boostRole(ROLE_CX, 0.24, 0.32 * Math.min(1, pfn / maxS));
-            boostRole(ROLE_MB, 0.22, 0.3 * Math.min(1, (pfn * 0.6 + ring * 0.4) / maxS));
-            boostRole(ROLE_AL, 0.22, 0.3 * Math.min(1, (ring * 0.7 + pfn * 0.3) / maxS));
-            // Pathway: ensure all three carves get a medium floor even if CX stages dominate.
-            if (pathwayOn) {
-              roleTarget[ROLE_AL] = Math.max(roleTarget[ROLE_AL], 0.28);
-              roleTarget[ROLE_MB] = Math.max(roleTarget[ROLE_MB], 0.28);
-              roleTarget[ROLE_CX] = Math.max(roleTarget[ROLE_CX], 0.3);
-            }
+          if (pathwayOn) {
+            // Pathway carves share a calm floor; cascade tick dims inactive ones
+            // further so the stimulated stage pops against them.
+            roleTarget[ROLE_AL] = 0.085;
+            roleTarget[ROLE_MB] = 0.085;
+            roleTarget[ROLE_CX] = 0.085;
+          } else if (hots.length > 0) {
+            // Single-region ablation: soft activity from stage spikes.
+            boostRole(ROLE_CX, 0.14, 0.1 * Math.min(1, pfn / maxS));
+            boostRole(ROLE_MB, 0.12, 0.1 * Math.min(1, (pfn * 0.6 + ring * 0.4) / maxS));
+            boostRole(ROLE_AL, 0.12, 0.1 * Math.min(1, (ring * 0.7 + pfn * 0.3) / maxS));
           } else if (!selected && !pathwayOn) {
             roleTarget[ROLE_SENSORY] = 0.12 + 0.18 * Math.min(1, ring / maxS);
             roleTarget[ROLE_CX] = 0.14 + 0.2 * Math.min(1, pfn / maxS);
@@ -593,7 +608,7 @@ export function MaleCnsBrainViz(props: {
             roleTarget[ROLE_AL] =
               0.12 + 0.18 * Math.min(1, (ring * 0.7 + pfn * 0.3) / maxS);
           }
-          if (boost) flash = Math.max(flash, 0.15);
+          // No global flash here — whole-cloud flicker looked pointless.
         }
 
         function setRegion(r: RegionKey | null, pathway?: boolean) {
@@ -609,10 +624,38 @@ export function MaleCnsBrainViz(props: {
         }
 
         function pulse() {
-          flash = 1;
+          // Soft nudge only (was full-brain white flash).
+          flash = Math.max(flash, 0.22);
         }
 
-        apiRef.current = { applyActivity, setRegion, pulse, applySpikes };
+        function setCascadeBoost(stage: number) {
+          cascadeBoost.fill(0);
+          // Dim non-active carves; only the active stage gets a boost + sparks.
+          if (stage === 0) {
+            activeCascadeRole = ROLE_AL;
+            cascadeBoost[ROLE_AL] = 1.2;
+            sparkRole(ROLE_AL, 48);
+          } else if (stage === 1) {
+            activeCascadeRole = ROLE_MB;
+            cascadeBoost[ROLE_MB] = 1.2;
+            sparkRole(ROLE_MB, 48);
+          } else if (stage === 2) {
+            activeCascadeRole = ROLE_CX;
+            cascadeBoost[ROLE_CX] = 1.2;
+            sparkRole(ROLE_CX, 52);
+          } else {
+            activeCascadeRole = -1;
+            hotSpikes = [];
+          }
+        }
+
+        apiRef.current = {
+          applyActivity,
+          setRegion,
+          pulse,
+          applySpikes,
+          setCascadeBoost,
+        };
         setStatus("ready");
 
         const count = atlas.count;
@@ -632,16 +675,27 @@ export function MaleCnsBrainViz(props: {
           for (let r = 0; r < ROLE_COUNT; r++) {
             roleBoost[r] += (roleTarget[r] - roleBoost[r]) * ease;
           }
-          // Decision flash: tiny — used to multiply the WHOLE cloud and look
-          // like "everything lit up". Spikes carry the punch now.
-          flash *= Math.exp(-dt * 3.2);
-          const flashMul = 1 + 0.08 * flash;
+          // Think flash ~250–300 ms — bright enough to read as a decision.
+          flash *= Math.exp(-dt * 3.5);
+          const flashMul = 1 + 0.12 * flash;
+          // Hold boost on the active cascade carve; kill the others fast.
+          for (let r = 0; r < ROLE_COUNT; r++) {
+            if (r === activeCascadeRole) {
+              cascadeBoost[r] += (1.35 - cascadeBoost[r]) * Math.min(1, dt * 12);
+            } else {
+              cascadeBoost[r] *= Math.exp(-dt * 8);
+            }
+          }
+          // Keep re-sparking the active carve so sparse lights stay bright.
+          if (activeCascadeRole >= 0 && now - lastResparkMs > 110) {
+            sparkRole(activeCascadeRole, 42);
+          }
           // Region focus cross-fade (selection changes never pop).
           focusT += ((selected || pathwayOn ? 1 : 0) - focusT) * Math.min(1, dt * 4);
 
           const hots = hotRolesFor(selected, pathwayOn);
-          const hotPulse = 1 + 0.08 * Math.sin(t * 1.5);
-          const hotGain = 1 + 0.28 * focusT;
+          const hotPulse = 1 + 0.18 * Math.sin(t * 2.8);
+          const hotGain = 1 + 0.45 * focusT;
           const dimAmt = selected || pathwayOn ? Math.max(focusT, 0.92) : 0;
 
           for (let i = 0; i < count; i++) {
@@ -650,23 +704,41 @@ export function MaleCnsBrainViz(props: {
             let bg = baseColors[i * 3 + 1];
             let bb = baseColors[i * 3 + 2];
             let a: number;
+            const cBoost = 1 + cascadeBoost[role];
             if (hots.includes(role)) {
               br += (accentColors[i * 3] - br) * focusT;
               bg += (accentColors[i * 3 + 1] - bg) * focusT;
               bb += (accentColors[i * 3 + 2] - bb) * focusT;
-              a = roleBoost[role] * flashMul * hotPulse * hotGain;
+              // Pathway hierarchy while cascading:
+              //   active  → bright + pulse + sparks
+              //   inactive pathway carves → soft tint (above rest-of-brain)
+              //   rest of brain → very dim silhouette
+              if (
+                pathwayOn &&
+                activeCascadeRole >= 0 &&
+                role !== activeCascadeRole
+              ) {
+                // Soft pathway landmark — clearly dimmer than the stimulated carve.
+                a = roleBoost[role] * 0.28;
+              } else {
+                a = roleBoost[role] * flashMul * hotPulse * hotGain * cBoost;
+              }
             } else {
+              // Non-pathway tissue: almost static silhouette (tiny wave only).
               const wave = 0.5 + 0.5 * Math.sin(t * speeds[i] + phases[i]);
-              const sparkle = 0.92 + 0.08 * wave;
+              const sparkle = pathwayOn ? 0.98 : 0.92 + 0.08 * wave;
+              // Pathway mode: push rest-of-brain darker so AL/MB/CX read as a set.
+              const restDim = pathwayOn ? 0.42 : 1;
               const dim = 1 + (focusDim(role) - 1) * dimAmt;
-              a = roleBoost[role] * flashMul * sparkle * dim;
+              a = roleBoost[role] * flashMul * sparkle * dim * cBoost * restDim;
             }
             colors[i * 3] = br * a;
             colors[i * 3 + 1] = bg * a;
             colors[i * 3 + 2] = bb * a;
           }
-          const SPIKE_TAU = 480;
-          const SPIKE_GAIN = 0.95;
+          // Insanely bright pin-pricks — must punch through additive cloud.
+          const SPIKE_TAU = 520;
+          const SPIKE_GAIN = 4.2;
           for (let h = 0; h < hotSpikes.length; h++) {
             const i = hotSpikes[h];
             const st = spikeTime[i];
@@ -676,19 +748,20 @@ export function MaleCnsBrainViz(props: {
             const wg = g * SPIKE_GAIN;
             const role = roles[i];
             const [SR, SG, SB] = ROLE_RGB[role] ?? ([1.0, 0.22, 0.58] as [number, number, number]);
-            colors[i * 3] = Math.min(1.05, wg * SR);
-            colors[i * 3 + 1] = Math.min(1.05, wg * SG);
-            colors[i * 3 + 2] = Math.min(1.05, wg * SB);
+            // Hot white core + role color (values >>1 for AdditiveBlending).
+            colors[i * 3] = Math.min(5.5, 1.8 * wg + wg * SR * 2.2);
+            colors[i * 3 + 1] = Math.min(5.5, 1.8 * wg + wg * SG * 2.2);
+            colors[i * 3 + 2] = Math.min(5.5, 1.8 * wg + wg * SB * 2.2);
           }
           colorAttr.needsUpdate = true;
 
-          // Modest size bump on spikes — big enough to see, not a bloom wash.
+          const flashSize = 0.01 * flash;
           material.size =
             hotSpikes.length > 0
-              ? 0.048
+              ? 0.125 + flashSize
               : liveRef.current && idleRef.current
-                ? 0.034
-                : 0.032;
+                ? 0.034 + flashSize
+                : 0.03 + flashSize;
           material.opacity = 1;
 
           controls.update();
@@ -719,22 +792,23 @@ export function MaleCnsBrainViz(props: {
     };
   }, []);
 
+  // Drive cascade role bloom from BrainPanel’s staggered stage index.
+  useEffect(() => {
+    apiRef.current?.setCascadeBoost(cascadeStage);
+  }, [cascadeStage]);
+
   useEffect(() => {
     const api = apiRef.current;
     if (!api) return;
+    for (const t of cascadeTimers.current) clearTimeout(t);
+    cascadeTimers.current = [];
+
     if (!diag) {
       api.applyActivity(null, false);
       return;
     }
-    api.applyActivity(diag.stageSpikes, true);
-    const stages = (diag as { stageResults?: Record<RegionKey, StepResult> }).stageResults;
-    if (pathwayMode && stages) {
-      api.applySpikes(stages.antennal_lobe.spikeCount, "antennal_lobe");
-      api.applySpikes(stages.mushroom_body.spikeCount, "mushroom_body");
-      api.applySpikes(stages.central_complex.spikeCount, "central_complex");
-    } else {
-      api.applySpikes(diag.spikeCount);
-    }
+    // Activity floors only — sparse sparks come solely from cascadeStage.
+    api.applyActivity(diag.stageSpikes, false);
     const key =
       (diag.stageSpikes.ring ?? 0) +
       (diag.stageSpikes.pfn ?? 0) * 1_000 +
@@ -744,6 +818,11 @@ export function MaleCnsBrainViz(props: {
       lastPulseKey.current = key;
       api.pulse();
     }
+
+    return () => {
+      for (const t of cascadeTimers.current) clearTimeout(t);
+      cascadeTimers.current = [];
+    };
   }, [diag, pathwayMode]);
 
   return (

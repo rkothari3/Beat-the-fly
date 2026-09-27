@@ -60,6 +60,19 @@ cd app && npm install && npm run dev
 
 Open the URL Vite prints (usually http://localhost:5173).
 
+**Player loop:** name → Start pathway → 30 s match → results (roast +
+leaderboard) → Play again. One entry per name: a replay only updates the
+board if the new run is better (higher margin, then higher human score).
+
+**Scores & persistence**
+- Browser `localStorage` — survives refresh on that machine (always on).
+- Match server (`cd server && npm start`) — shared venue board at
+  `GET /leaderboard`.
+- Set `DATABASE_URL` to a **Tiger Data** (or Postgres) connection string for
+  a board that survives server restarts and works across laptops. Without it
+  the server keeps scores in memory only (lost when you stop `npm start`).
+  Schema sketch: `server/tiger_schema.sql`.
+
 Hard-refresh (Ctrl+Shift+R) after pulling code so the equal split-screen
 CSS/WebGL changes load. The game pane is exactly 50/50 YOU | FLY; the
 sidebar sits beside it and does not steal half the canvas.

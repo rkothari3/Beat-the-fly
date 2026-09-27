@@ -263,23 +263,33 @@ function Dot({ d }: { d: CircuitDot }) {
   );
 }
 
-/** Soft AL → MB → CX strip for the pathway picker card. */
+/** Soft AL → MB → CX strip — one diagram for the whole cascade. */
 export function PathwayCircuitSchematic() {
   const al: { x: number; y: number }[] = [];
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2;
-    al.push({ x: 36 + Math.cos(a) * 12, y: 36 + Math.sin(a) * 12 });
+    al.push({ x: 36 + Math.cos(a) * 12, y: 32 + Math.sin(a) * 12 });
   }
   const mb: { x: number; y: number }[] = [];
   for (let r = 0; r < 4; r++) {
     for (let c = 0; c < 6; c++) {
-      mb.push({ x: 100 + c * 6, y: 24 + r * 6 });
+      mb.push({ x: 100 + c * 6, y: 20 + r * 6 });
     }
   }
-  const cx: { x: number; y: number }[] = [];
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
-    cx.push({ x: 210 + Math.cos(a) * 14, y: 36 + Math.sin(a) * 14 });
+  const cxRing: { x: number; y: number }[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    cxRing.push({ x: 200 + Math.cos(a) * 10, y: 32 + Math.sin(a) * 10 });
+  }
+  const pfn: { x: number; y: number }[] = [];
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < 3; c++) {
+      pfn.push({ x: 222 + c * 5, y: 22 + r * 5 });
+    }
+  }
+  const pfl: { x: number; y: number }[] = [];
+  for (let i = 0; i < 5; i++) {
+    pfl.push({ x: 248 + (i % 3) * 5, y: 28 + Math.floor(i / 3) * 6 });
   }
 
   return (
@@ -292,24 +302,30 @@ export function PathwayCircuitSchematic() {
       aria-label="Pathway: Antennal Lobe to Mushroom Body to Central Complex"
       style={{ display: "block" }}
     >
-      <FlowArrow x1={54} x2={94} y={36} />
-      <FlowArrow x1={142} x2={188} y={36} />
+      <FlowArrow x1={54} x2={94} y={32} />
+      <FlowArrow x1={142} x2={182} y={32} />
       {al.map((p, i) => (
         <circle key={`a${i}`} cx={p.x} cy={p.y} r={1.8} fill="var(--ring)" opacity={0.9} />
       ))}
       {mb.map((p, i) => (
         <circle key={`m${i}`} cx={p.x} cy={p.y} r={1.7} fill="var(--pfn)" opacity={0.9} />
       ))}
-      {cx.map((p, i) => (
-        <circle key={`c${i}`} cx={p.x} cy={p.y} r={1.9} fill="#73ebff" opacity={0.95} />
+      {cxRing.map((p, i) => (
+        <circle key={`r${i}`} cx={p.x} cy={p.y} r={1.6} fill="#73ebff" opacity={0.95} />
       ))}
-      <StageLabel x={36} y={76} color="var(--ring)">
+      {pfn.map((p, i) => (
+        <circle key={`p${i}`} cx={p.x} cy={p.y} r={1.5} fill="var(--pfn)" opacity={0.85} />
+      ))}
+      {pfl.map((p, i) => (
+        <circle key={`f${i}`} cx={p.x} cy={p.y} r={1.6} fill="var(--pfl)" opacity={0.95} />
+      ))}
+      <StageLabel x={36} y={72} color="var(--ring)">
         AL
       </StageLabel>
-      <StageLabel x={118} y={76} color="var(--pfn)">
+      <StageLabel x={118} y={72} color="var(--pfn)">
         MB
       </StageLabel>
-      <StageLabel x={210} y={76} color="#73ebff">
+      <StageLabel x={228} y={72} color="#73ebff">
         CX
       </StageLabel>
     </svg>

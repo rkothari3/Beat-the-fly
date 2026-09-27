@@ -1,49 +1,48 @@
 /**
- * Live brain panel — real MaleCNS soma atlas particle connectome
- * (cyan/gold glitter, lab visualizer language) plus action probs / honesty /
- * anatomy links. Flex layout: header/viz/decision/science stay visible at 1080p.
+ * Live brain panel — coolness-first rebuild.
+ *
+ * Why this layout (beginner note):
+ *   Judges need to *feel* the fly thinking. So column 3 is one vertical story:
+ *   (1) big glittering MaleCNS atlas, (2) AL→MB→CX cascade meters from real
+ *   stageResults, (3) chosen-move bars, (4) a thin credibility footer.
+ *   Static stills / proof grids / link piles are demoted so they don't steal
+ *   the eye from the live pathway.
  */
 
-import React, { useEffect } from "react";
-import { motion, useReducedMotion, useSpring, useTransform } from "motion/react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { RegionKey, StepResult } from "../brain/LifEngine";
+import { PathwayStepResult } from "../brain/PathwayEngine";
 import { PROOF } from "./ProofCard";
-import { WhereItLivesStill } from "./schematics/WhereItLivesStill";
 import { MaleCnsBrainViz } from "./MaleCnsBrainViz";
-import { NEUROGLANCER_FULL_URL, neuroglancerRegionUrl } from "./neuroglancerLinks";
+import {
+  NEUROGLANCER_FULL_URL,
+  neuroglancerRegionUrl,
+} from "./neuroglancerLinks";
 
-const READOUT_SPRING = { stiffness: 260, damping: 28, mass: 0.6 };
-
-/** Display order matches the mock: forward → left → stay → right */
-const MOVE_ROWS: { name: string; action: number }[] = [
+/** Action ids match LaneWorld: stay=0 forward=1 left=2 right=3 */
+const MOVE_META: { name: string; action: number }[] = [
   { name: "forward", action: 1 },
   { name: "left", action: 2 },
   { name: "stay", action: 0 },
   { name: "right", action: 3 },
 ];
 
-const REGION_BLURB: Record<RegionKey, string> = {
-  central_complex: "The fly's navigation & steering center",
-  mushroom_body: "The fly's learning & memory center",
-  antennal_lobe: "The fly's smell / sensory relay center",
-};
+const STAGE_META: {
+  key: RegionKey;
+  short: string;
+  color: string;
+}[] = [
+  { key: "antennal_lobe", short: "AL", color: "#8cff59" },
+  { key: "mushroom_body", short: "MB", color: "#ff6bf2" },
+  { key: "central_complex", short: "CX", color: "#73ebff" },
+];
 
-const PATHWAY_BLURB =
-  "Soft AL→MB→CX cascade of frozen MaleCNS wiring (+ look-ahead when live)";
-
-/**
- * External anatomy explorers (open in a new tab).
- * The in-panel particle cloud is a real MaleCNS brain soma atlas (CC BY 4.0)
- * with lab-style additive glow — brain-only activity display (no VNC cord),
- * not the controller. Pitch owns the “display vs controller” nuance.
- */
 const CEREBRA_URL = "https://complete-3d-brain.higgsfield.app/";
 const CELLTYPE_HOME =
   "https://reiserlab.github.io/celltype-explorer-drosophila-male-cns/";
 
-/** One official Cell Type Explorer page per playable region (landmark type). */
 const REGION_CELLTYPE_URL: Record<RegionKey, { href: string; tip: string }> = {
-  // PFL3 = CX steering output we read for moves — better than a random CX type.
   central_complex: {
     href: `${CELLTYPE_HOME}types/PFL3.html`,
     tip: "PFL3 (CX steering)",
@@ -58,56 +57,41 @@ const REGION_CELLTYPE_URL: Record<RegionKey, { href: string; tip: string }> = {
   },
 };
 
-/**
- * Hero CTA into the real EM dataset. Why a link and not an iframe:
- * Neuroglancer streams gigabytes of EM chunks and needs its own full GPU
- * context — embedded in the sidebar it would be slow, cramped, and could
- * never show our live LIF spikes. A curated deep-link keeps the jobs
- * separate: our glitter brain = live activity, Neuroglancer = real anatomy.
- */
 const ngCtaStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  gap: 7,
+  gap: 6,
   width: "100%",
   boxSizing: "border-box",
   fontFamily: "var(--font-mono)",
-  fontSize: 10.5,
+  fontSize: 10,
   fontWeight: 700,
-  letterSpacing: "0.05em",
+  letterSpacing: "0.04em",
   color: "#052a2a",
   background: "linear-gradient(90deg, var(--accent-teal), #7ad7ff)",
   border: "none",
   borderRadius: "var(--radius-sm)",
-  padding: "7px 10px",
+  padding: "6px 8px",
   textDecoration: "none",
   lineHeight: 1.2,
-  marginBottom: 6,
 };
 
-/** Visible anatomy deep-links — judges often missed the 9px footer row. */
-const anatomyBtnStyle: React.CSSProperties = {
+const moreLinkStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  justifyContent: "center",
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
+  fontSize: 9,
   fontWeight: 600,
   color: "var(--accent-teal)",
-  background: "var(--bg-elevated)",
-  border: "1px solid rgba(45,212,191,0.35)",
-  borderRadius: "var(--radius-sm)",
-  padding: "5px 8px",
   textDecoration: "none",
-  lineHeight: 1.2,
+  opacity: 0.85,
 };
 
 export const REGION_STATS: Record<
   RegionKey,
   { neurons: number; connections: number; matchPct: number }
 > = {
-  // Real numbers: manifest.n + W_vals.bin float count; match from manifest.val_acc
   central_complex: { neurons: 2950, connections: 402394, matchPct: 95.8 },
   mushroom_body: { neurons: 4501, connections: 860814, matchPct: 95.6 },
   antennal_lobe: { neurons: 3783, connections: 423980, matchPct: 96.8 },
@@ -130,102 +114,61 @@ export const PATHWAY_STATS = {
     3,
 };
 
-function useSpringedValue(value: number) {
-  const reduce = useReducedMotion();
-  const spring = useSpring(0, READOUT_SPRING);
-  useEffect(() => {
-    if (reduce) spring.jump(value);
-    else spring.set(value);
-  }, [value, reduce, spring]);
-  return spring;
+function sumSpikes(spikeCount: Float32Array | undefined): number {
+  if (!spikeCount || spikeCount.length === 0) return 0;
+  let s = 0;
+  for (let i = 0; i < spikeCount.length; i++) s += spikeCount[i];
+  return s;
 }
 
-function AnimatedNumber({ value }: { value: number }) {
-  const spring = useSpringedValue(value);
-  const text = useTransform(spring, (v) => `${Math.round(v)}`);
-  return <motion.span>{text}</motion.span>;
-}
-
-function SpikeCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div
-      style={{
-        flex: 1,
-        background: "var(--bg-card)",
-        borderRadius: "var(--radius-md)",
-        border: "1px solid var(--border-subtle)",
-        borderTop: `3px solid ${color}`,
-        padding: "5px 6px 4px",
-        textAlign: "center",
-        boxShadow: "var(--shadow-card)",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-mono-sm)",
-          color,
-          fontWeight: 700,
-          letterSpacing: "0.06em",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 18,
-          fontWeight: 600,
-          color: "var(--text-primary)",
-          lineHeight: 1.1,
-          marginTop: 1,
-        }}
-      >
-        <AnimatedNumber value={value} />
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          color: "var(--text-muted)",
-        }}
-      >
-        spikes
-      </div>
-    </div>
-  );
+function stageResultsOf(
+  diag: StepResult | null
+): PathwayStepResult["stageResults"] | null {
+  if (!diag) return null;
+  const sr = (diag as PathwayStepResult).stageResults;
+  return sr ?? null;
 }
 
 function DecisionBar({
   name,
   prob,
   chosen,
+  pulse,
+  topBrain,
 }: {
   name: string;
   prob: number;
   chosen: boolean;
+  pulse: boolean;
+  /** Highest brain % — shown when search acted on a different hop. */
+  topBrain?: boolean;
 }) {
   const reduce = useReducedMotion();
-  const spring = useSpringedValue(prob);
-  const pct = useTransform(spring, (v) => `${Math.round(v * 100)}%`);
-  const barColor = chosen ? "var(--accent-pink)" : "var(--accent-blue)";
+  const pctLabel = `${Math.round(prob * 100)}%`;
+  const fill = chosen ? "var(--accent-pink)" : "var(--accent-blue)";
 
   return (
-    <div
+    <motion.div
+      initial={false}
+      animate={{
+        boxShadow:
+          chosen && pulse && !reduce
+            ? "0 0 14px rgba(248,113,113,0.45)"
+            : "0 0 0 rgba(0,0,0,0)",
+        background:
+          chosen && pulse && !reduce
+            ? "rgba(248,113,113,0.08)"
+            : "transparent",
+      }}
+      transition={{ duration: reduce ? 0 : 0.15 }}
       style={{
         display: "grid",
         gridTemplateColumns: "52px 1fr 36px auto",
         alignItems: "center",
         gap: 6,
-        marginBottom: 3,
+        marginBottom: 2,
+        borderRadius: "var(--radius-sm)",
+        padding: "1px 3px",
       }}
     >
       <div
@@ -247,20 +190,17 @@ function DecisionBar({
           boxShadow: "var(--shadow-inset)",
         }}
       >
-        <motion.div
-          initial={false}
-          animate={{ backgroundColor: barColor }}
-          transition={{ duration: reduce ? 0 : 0.2 }}
+        <div
           style={{
-            width: "100%",
+            width: `${Math.max(0, Math.min(100, Math.round(prob * 100)))}%`,
             height: "100%",
-            scaleX: spring,
-            transformOrigin: "left center",
+            background: fill,
             borderRadius: "var(--radius-pill)",
+            transition: reduce ? undefined : "width 120ms linear",
           }}
         />
       </div>
-      <motion.div
+      <div
         style={{
           fontFamily: "var(--font-mono)",
           fontSize: "var(--text-mono)",
@@ -268,8 +208,8 @@ function DecisionBar({
           color: "var(--text-secondary)",
         }}
       >
-        {pct}
-      </motion.div>
+        {pctLabel}
+      </div>
       <div style={{ minWidth: 48 }}>
         {chosen && (
           <span
@@ -282,11 +222,199 @@ function DecisionBar({
               padding: "1px 5px",
             }}
           >
-            chosen
+            acted
+          </span>
+        )}
+        {!chosen && topBrain && (
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              color: "var(--text-muted)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-pill)",
+              padding: "1px 5px",
+            }}
+          >
+            brain
           </span>
         )}
       </div>
-    </div>
+    </motion.div>
+  );
+}
+
+/**
+ * AL → MB → CX meters. Why staggered pulse: the engine already runs AL then
+ * MB then CX each step; animating meters left→right (~90ms apart) sells that
+ * cascade even though the JS step is instantaneous.
+ */
+function CascadeStrip({
+  diag,
+  pathwayMode,
+  regionKey,
+  pulseGen,
+  activeStage,
+}: {
+  diag: StepResult | null;
+  pathwayMode: boolean;
+  regionKey: RegionKey;
+  pulseGen: number;
+  activeStage: number; // 0=AL, 1=MB, 2=CX, -1=none
+}) {
+  const reduce = useReducedMotion();
+  const stages = stageResultsOf(diag);
+
+  const values = useMemo(() => {
+    if (pathwayMode && stages) {
+      return STAGE_META.map((m) => sumSpikes(stages[m.key].spikeCount));
+    }
+    // Non-pathway: emphasize the selected region with total spikes
+    const total = sumSpikes(diag?.spikeCount);
+    return STAGE_META.map((m) => (m.key === regionKey ? total : 0));
+  }, [pathwayMode, stages, diag, regionKey]);
+
+  const maxV = Math.max(1, ...values);
+
+  return (
+    <section
+      style={{
+        flexShrink: 0,
+        background: "var(--bg-card)",
+        border: "1px solid var(--border-subtle)",
+        borderRadius: "var(--radius-md)",
+        padding: "6px 8px 7px",
+        boxShadow: "var(--shadow-card)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: "0.1em",
+          color: "var(--text-muted)",
+          marginBottom: 6,
+        }}
+      >
+        {pathwayMode ? "THINKING CASCADE · AL → MB → CX" : "REGION ACTIVITY"}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          gap: 0,
+        }}
+      >
+        {STAGE_META.map((m, i) => {
+          const pct = values[i] / maxV;
+          // Trail: stages already visited stay softly lit; active stage pops.
+          const lit = activeStage === i;
+          const done = pathwayMode && activeStage > i;
+          return (
+            <React.Fragment key={m.key}>
+              {i > 0 && (
+                <div
+                  aria-hidden
+                  style={{
+                    width: 14,
+                    alignSelf: "center",
+                    height: 2,
+                    background:
+                      pathwayMode && activeStage >= i
+                        ? m.color
+                        : "var(--border-subtle)",
+                    opacity: pathwayMode && activeStage >= i ? 0.9 : 0.5,
+                    boxShadow:
+                      pathwayMode && activeStage >= i
+                        ? `0 0 8px ${m.color}`
+                        : undefined,
+                    transition: reduce ? undefined : "all 120ms ease",
+                  }}
+                />
+              )}
+              <motion.div
+                key={`${m.key}-${pulseGen}`}
+                initial={false}
+                animate={{
+                  scale: lit && !reduce ? 1.06 : 1,
+                  borderColor: lit || done ? m.color : "rgba(255,255,255,0.06)",
+                  boxShadow: lit
+                    ? `0 0 18px ${m.color}66`
+                    : done
+                      ? `0 0 8px ${m.color}33`
+                      : "0 0 0 transparent",
+                }}
+                transition={{ duration: reduce ? 0 : 0.15 }}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--border-subtle)",
+                  padding: "5px 6px 6px",
+                  background: lit
+                    ? "rgba(255,255,255,0.04)"
+                    : "var(--bg-inset)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    marginBottom: 4,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: m.color,
+                      letterSpacing: "0.06em",
+                      textShadow: lit ? `0 0 10px ${m.color}` : undefined,
+                    }}
+                  >
+                    {m.short}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    {Math.round(values[i])}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    height: 5,
+                    borderRadius: "var(--radius-pill)",
+                    background: "rgba(0,0,0,0.35)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      width: `${Math.round(pct * 100)}%`,
+                      opacity: lit || done || !pathwayMode ? 1 : 0.45,
+                    }}
+                    transition={{ duration: reduce ? 0 : 0.15 }}
+                    style={{
+                      height: "100%",
+                      background: m.color,
+                      borderRadius: "var(--radius-pill)",
+                      boxShadow: lit ? `0 0 8px ${m.color}` : undefined,
+                    }}
+                  />
+                </div>
+              </motion.div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -305,34 +433,117 @@ export function BrainPanel(props: {
     regionKey,
     label,
     diag,
-    nSteps = 6,
     liveBrain = false,
     pathwayMode = false,
   } = props;
-  const stats = pathwayMode ? PATHWAY_STATS : REGION_STATS[regionKey];
-  const spikes = diag?.stageSpikes;
-  const headerBlurb = pathwayMode ? PATHWAY_BLURB : REGION_BLURB[regionKey];
-  const headerTitle = pathwayMode ? "Full pathway" : label;
+  const reduce = useReducedMotion();
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  // Stagger pulse: compressed AL→MB→CX (~250ms) so it finishes inside
+  // DECISION_EVERY_MS (~300) — brain still runs all three stages every hop.
+  const [pulseGen, setPulseGen] = useState(0);
+  const [activeStage, setActiveStage] = useState(-1);
+  const [movePulse, setMovePulse] = useState(false);
+  const lastDiagKey = useRef("");
+
+  // During cascade: show that stage’s own probs (AL→MB→CX), then the blended
+  // pathway readout. Why: CX alone often sticks on a prior; AL tracks the board.
+  const moveRows = useMemo(() => {
+    let p0 = 0;
+    let p1 = 0;
+    let p2 = 0;
+    let p3 = 0;
+    const stages = stageResultsOf(diag);
+    if (pathwayMode && stages && activeStage >= 0 && activeStage <= 2) {
+      const stageKey = STAGE_META[activeStage].key;
+      const src =
+        activeStage < 2 ? stages[stageKey].probs : diag!.probs;
+      p0 = Number(src[0]) || 0;
+      p1 = Number(src[1]) || 0;
+      p2 = Number(src[2]) || 0;
+      p3 = Number(src[3]) || 0;
+    } else if (diag) {
+      p0 = Number(diag.probs[0]) || 0;
+      p1 = Number(diag.probs[1]) || 0;
+      p2 = Number(diag.probs[2]) || 0;
+      p3 = Number(diag.probs[3]) || 0;
+    }
+    const byAction = [p0, p1, p2, p3];
+    const rows = MOVE_META.map((row) => ({
+      ...row,
+      prob: byAction[row.action] ?? 0,
+    }));
+    rows.sort((a, b) => b.prob - a.prob);
+    return rows;
+  }, [diag, pathwayMode, activeStage]);
+
+  const chosenAction = diag?.action ?? -1;
+
+  useEffect(() => {
+    if (!diag) {
+      setActiveStage(-1);
+      setMovePulse(false);
+      return;
+    }
+    // Fire every decision frame — include a time crumb so identical spike totals still pulse.
+    const key = `${diag.action}|${Number(diag.probs[0]).toFixed(3)}|${Number(diag.probs[1]).toFixed(3)}|${Number(diag.probs[2]).toFixed(3)}|${Number(diag.probs[3]).toFixed(3)}|${sumSpikes(diag.spikeCount)}`;
+    if (key === lastDiagKey.current) return;
+    lastDiagKey.current = key;
+    setPulseGen((g) => g + 1);
+    setMovePulse(false);
+
+    if (reduce) {
+      setActiveStage(pathwayMode ? 2 : STAGE_META.findIndex((m) => m.key === regionKey));
+      setMovePulse(true);
+      return;
+    }
+
+    const timers: number[] = [];
+    if (pathwayMode) {
+      setActiveStage(0);
+      timers.push(
+        window.setTimeout(() => setActiveStage(1), 90),
+        window.setTimeout(() => setActiveStage(2), 180),
+        window.setTimeout(() => {
+          setActiveStage(2);
+          setMovePulse(true);
+        }, 250)
+      );
+    } else {
+      const idx = STAGE_META.findIndex((m) => m.key === regionKey);
+      setActiveStage(idx);
+      timers.push(window.setTimeout(() => setMovePulse(true), 120));
+    }
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, [diag, pathwayMode, regionKey, reduce]);
+
+  const badgeLabel = liveBrain ? "LIVE" : diag ? "WATCHING" : "IDLE";
+  const badgeColor = liveBrain
+    ? "var(--accent-teal)"
+    : diag
+      ? "var(--text-secondary)"
+      : "var(--text-muted)";
 
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 5,
+        gap: 6,
         height: "100%",
         minHeight: 0,
         overflow: "hidden",
-        padding: "6px 10px 4px",
+        padding: "6px 10px 5px",
         background: "var(--bg-panel)",
         boxShadow: "var(--shadow-panel)",
       }}
     >
-      {/* Header — fixed */}
+      {/* Header — short title + pathway blurb + LIVE/WATCHING pill */}
       <header
         style={{
           display: "flex",
           justifyContent: "space-between",
+          alignItems: "flex-start",
           gap: 8,
           flexShrink: 0,
         }}
@@ -340,71 +551,62 @@ export function BrainPanel(props: {
         <div style={{ minWidth: 0 }}>
           <div
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-label)",
-              letterSpacing: "0.12em",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-            }}
-          >
-            Brain mode
-          </div>
-          <div
-            style={{
-              fontSize: 17,
+              fontSize: 16,
               fontWeight: 700,
               color: "var(--text-primary)",
-              marginTop: 1,
               lineHeight: 1.15,
             }}
           >
-            {headerTitle}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 1 }}>
-            {headerBlurb}
+            Fly brain
           </div>
         </div>
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-mono-sm)",
+            fontWeight: 700,
+            color: badgeColor,
+            border: `1px solid ${liveBrain ? "rgba(45,212,191,0.45)" : "var(--border-subtle)"}`,
+            borderRadius: "var(--radius-pill)",
+            padding: "3px 9px",
+            flexShrink: 0,
+            letterSpacing: "0.08em",
+            boxShadow: liveBrain ? "0 0 12px rgba(45,212,191,0.25)" : undefined,
+          }}
+          title={
+            liveBrain
+              ? "Connectome is choosing moves"
+              : "Atlas animates from LIF; bot/player chooses moves"
+          }
+        >
+          <span
+            aria-hidden
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-mono-sm)",
-              color: "var(--accent-teal)",
-              border: "1px solid rgba(45,212,191,0.35)",
-              borderRadius: "var(--radius-pill)",
-              padding: "2px 7px",
-              marginBottom: 4,
-              // Flat pill — glow is reserved for the selected region card.
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: badgeColor,
+              boxShadow: liveBrain ? `0 0 8px ${badgeColor}` : undefined,
             }}
-          >
-            <span aria-hidden>🔒</span> Frozen wiring
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              color: "var(--text-muted)",
-            }}
-          >
-            {stats.neurons.toLocaleString()} neurons · {stats.connections.toLocaleString()}{" "}
-            connections
-          </div>
+          />
+          {badgeLabel}
         </div>
       </header>
 
-      {/* Real MaleCNS soma atlas — cyan/gold lab particle look (flexible middle) */}
+      {/* Hero atlas — ~55–65% of column; eats space taken from removed cards */}
       <section
         style={{
-          flex: "2.4 1 0",
-          minHeight: 300,
-          maxHeight: 480,
+          flex: "1 1 0",
+          minHeight: 0,
+          // Target ~58% of a typical 900px column content area
+          flexBasis: "58%",
           background: "var(--bg-inset)",
           borderRadius: "var(--radius-lg)",
           border: "1px solid var(--border-subtle)",
-          padding: "4px 6px 6px",
+          padding: "3px 4px 4px",
           boxShadow: "var(--shadow-inset)",
           display: "flex",
           flexDirection: "column",
@@ -417,135 +619,100 @@ export function BrainPanel(props: {
             justifyContent: "space-between",
             alignItems: "center",
             fontFamily: "var(--font-mono)",
-            fontSize: 9,
+            fontSize: 8,
             color: "var(--text-muted)",
             letterSpacing: "0.08em",
-            padding: "0 2px 3px",
+            padding: "1px 4px 2px",
             flexShrink: 0,
           }}
         >
           <span>MALE CNS · BRAIN ATLAS</span>
-          <span
-            style={{
-              color: liveBrain ? "var(--accent-teal)" : "var(--text-secondary)",
-              fontWeight: 700,
-            }}
-          >
-            {liveBrain ? "LIVE" : diag ? "DISPLAY" : "IDLE"}
+          <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
+            {pathwayMode ? "PATHWAY" : label.toUpperCase()}
           </span>
         </div>
-        <div style={{ flex: "1 1 0", minHeight: 300, position: "relative", overflow: "hidden" }}>
+        <div
+          style={{
+            flex: "1 1 0",
+            minHeight: 280,
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
           <div style={{ position: "absolute", inset: 0 }}>
-            {/* region lights CX / MB / AL blobs; why pass it: selection must glitter that carving */}
             <MaleCnsBrainViz
               diag={diag}
               liveBrain={liveBrain}
               region={regionKey}
               pathwayMode={pathwayMode}
               idleAnim
+              cascadeStage={pathwayMode ? activeStage : -1}
             />
           </div>
         </div>
-        {/* Legend — cyan optic / gold central-motor + carved CX / MB / AL accents */}
+        {/* Legend — only the three pathway carves (no “Spiking” chip) */}
         <div
           style={{
             display: "flex",
             flexWrap: "wrap",
             justifyContent: "center",
-            gap: "2px 7px",
-            marginTop: 4,
+            gap: "2px 10px",
+            marginTop: 3,
             fontFamily: "var(--font-mono)",
-            fontSize: 7,
+            fontSize: 8,
             color: "var(--text-secondary)",
             fontWeight: 600,
             flexShrink: 0,
             lineHeight: 1.25,
           }}
         >
-          <LegendDot color="#ff59bf" label="Spiking" />
-          <LegendDot color="#0dd4ff" label="Optic" />
-          <LegendDot color="#ffb82e" label="Central" />
-          <LegendDot color="#73ebff" label="CX" hot={pathwayMode || regionKey === "central_complex"} />
-          <LegendDot
-            color="#ff6bf2"
-            label="Mushroom body"
-            hot={pathwayMode || regionKey === "mushroom_body"}
-          />
           <LegendDot
             color="#8cff59"
-            label="Antennal lobe"
-            hot={pathwayMode || regionKey === "antennal_lobe"}
+            label="AL"
+            hot={
+              pathwayMode
+                ? activeStage === 0
+                : regionKey === "antennal_lobe"
+            }
           />
-          <LegendDot color="#59f2d9" label="Sensory" />
-          <LegendDot color="#ff8c1f" label="Motor / descending" />
+          <LegendDot
+            color="#ff6bf2"
+            label="MB"
+            hot={
+              pathwayMode
+                ? activeStage === 1
+                : regionKey === "mushroom_body"
+            }
+          />
+          <LegendDot
+            color="#73ebff"
+            label="CX"
+            hot={
+              pathwayMode
+                ? activeStage === 2
+                : regionKey === "central_complex"
+            }
+          />
         </div>
       </section>
 
-      {/* Spike cards when we have stage diagnostics (any region) */}
-      {spikes && (
-        <div style={{ flexShrink: 0 }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            <SpikeCard label="RING" value={spikes.ring ?? 0} color="var(--ring)" />
-            <SpikeCard label="PFN" value={spikes.pfn ?? 0} color="var(--pfn)" />
-            <SpikeCard label="PFL" value={spikes.pfl ?? 0} color="var(--pfl)" />
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              color: "var(--text-muted)",
-              marginTop: 3,
-            }}
-          >
-            this decision · {nSteps} simulation steps
-            {!liveBrain ? " · viz from LIF (bot chooses moves)" : ""}
-          </div>
-        </div>
-      )}
+      <CascadeStrip
+        diag={diag}
+        pathwayMode={pathwayMode}
+        regionKey={regionKey}
+        pulseGen={pulseGen}
+        activeStage={activeStage}
+      />
 
-      {/* PFL output — fixed */}
+      {/* Move bars — % = brain preference; badge = hop the look-ahead actually took */}
       <section style={{ flexShrink: 0 }}>
         <div
           style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            letterSpacing: "0.1em",
-            color: "var(--text-muted)",
-            marginBottom: 4,
-          }}
-        >
-          PFL OUTPUT → MOVE
-        </div>
-        {diag
-          ? MOVE_ROWS.map((row) => (
-              <DecisionBar
-                key={row.name}
-                name={row.name}
-                prob={diag.probs[row.action] ?? 0}
-                chosen={diag.action === row.action}
-              />
-            ))
-          : MOVE_ROWS.map((row) => (
-              <DecisionBar key={row.name} name={row.name} prob={0} chosen={false} />
-            ))}
-      </section>
-
-      {/* Science cards — fixed */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 6,
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "var(--radius-md)",
-            padding: "6px 6px 4px",
-            boxShadow: "var(--shadow-card)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: 8,
+            marginBottom: 3,
           }}
         >
           <div
@@ -554,151 +721,152 @@ export function BrainPanel(props: {
               fontSize: 9,
               letterSpacing: "0.1em",
               color: "var(--text-muted)",
-              marginBottom: 2,
             }}
           >
-            WHERE IT LIVES
+            CHOSEN MOVE
           </div>
-          <WhereItLivesStill region={regionKey} compact />
-        </div>
-        <div
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "var(--radius-md)",
-            padding: "6px 8px 4px",
-            boxShadow: "var(--shadow-card)",
-          }}
-        >
           <div
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              letterSpacing: "0.08em",
+              fontSize: 8,
               color: "var(--text-muted)",
-              marginBottom: 4,
+              opacity: 0.85,
             }}
+            title="Bars = connectome preference. Badge = look-ahead hop (brain only biases it)."
           >
-            DOES THE WIRING MATTER?
+            bars=brain · badge=acted
           </div>
-          <WiringRows />
         </div>
-      </div>
+        {moveRows.map((row, i) => (
+          <DecisionBar
+            key={row.name}
+            name={row.name}
+            prob={row.prob}
+            chosen={chosenAction === row.action}
+            pulse={movePulse && chosenAction === row.action}
+            topBrain={i === 0 && chosenAction !== row.action}
+          />
+        ))}
+      </section>
 
-      {/*
-        Anatomy section — intentional and clickable. Previous footer links were 9px and
-        easy to miss; this is still compact (not a dashboard) and honest: explorers ≠ controller.
-      */}
-      <section
+      {/* Footer — Explore EM + optional More (wiring proof lives under More) */}
+      <footer
         style={{
           flexShrink: 0,
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-subtle)",
-          borderRadius: "var(--radius-md)",
-          padding: "6px 8px 7px",
-          boxShadow: "var(--shadow-card)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 5,
+          paddingTop: 1,
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            letterSpacing: "0.1em",
-            color: "var(--text-muted)",
-            marginBottom: 4,
-          }}
-        >
-          ANATOMY (opens in new tab)
-        </div>
-        <p
-          style={{
-            margin: "0 0 6px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-secondary)",
-            lineHeight: 1.35,
-          }}
-        >
-          Real MaleCNS brain soma positions (CC BY 4.0) — optic / central /
-          descending only; VNC cord cropped because CX / MB / AL live in the
-          brain. Glow maps LIF activity (
-          {stats.neurons.toLocaleString()} neurons
-          {pathwayMode ? " across AL+MB+CX" : ""}
-          ). Live pathway: soft cascade + look-ahead search. Ablations: one region
-          LIF only. Neuroglancer below is anatomy reference, not the live controller.
-        </p>
-        {/* Region-aware hero link: curated camera + only this region's neuropils */}
         <a
           href={neuroglancerRegionUrl(regionKey)}
           target="_blank"
           rel="noopener noreferrer"
           style={ngCtaStyle}
-          title="Opens Neuroglancer (new tab): real MaleCNS EM dataset, camera parked on this region, its neuropil meshes highlighted in the legend color"
+          title="Opens Neuroglancer (new tab): real MaleCNS EM, this region highlighted"
         >
-          <span aria-hidden>🔬</span>
-          <span>
-            EXPLORE {pathwayMode ? "CENTRAL COMPLEX" : label.toUpperCase()} IN
-            NEUROGLANCER — REAL EM, REGION
-            HIGHLIGHTED
-          </span>
+          Explore EM · {pathwayMode ? "Central complex" : label}
         </a>
-        <div
+        <button
+          type="button"
+          onClick={() => setMoreOpen((o) => !o)}
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 5,
+            alignSelf: "center",
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            color: "var(--text-muted)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "0 4px",
+            letterSpacing: "0.06em",
           }}
         >
-          <a
-            href={CEREBRA_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={anatomyBtnStyle}
+          {moreOpen ? "▾ LESS" : "▸ MORE"}
+        </button>
+        {moreOpen && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              alignItems: "center",
+            }}
           >
-            Cerebra 3D atlas
-          </a>
-          <a
-            href={REGION_CELLTYPE_URL[regionKey].href}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={anatomyBtnStyle}
-            title={REGION_CELLTYPE_URL[regionKey].tip}
-          >
-            Cell types
-          </a>
-          <a
-            href={NEUROGLANCER_FULL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={anatomyBtnStyle}
-            title="Official full-dataset Neuroglancer demo (all layers, whole CNS)"
-          >
-            Full dataset
-          </a>
-          <a
-            href="https://male-cns.janelia.org/"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={anatomyBtnStyle}
-          >
-            MaleCNS home
-          </a>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                color: "var(--text-secondary)",
+                textAlign: "center",
+                lineHeight: 1.4,
+                maxWidth: 240,
+              }}
+            >
+              Wiring check (CX eval): intact connectome matches teacher moves{" "}
+              {PROOF.intact != null ? `${(PROOF.intact * 100).toFixed(1)}%` : "—"}{" "}
+              vs shuffled edges ~
+              {PROOF.shuffled != null
+                ? Math.round(PROOF.shuffled * 100)
+                : 10}
+              % — proof the frozen wiring matters, not just the decoder.
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "4px 10px",
+                justifyContent: "center",
+              }}
+            >
+            <a
+              href={CEREBRA_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={moreLinkStyle}
+            >
+              Cerebra 3D
+            </a>
+            <a
+              href={REGION_CELLTYPE_URL[regionKey].href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={moreLinkStyle}
+              title={REGION_CELLTYPE_URL[regionKey].tip}
+            >
+              Cell types
+            </a>
+            <a
+              href={NEUROGLANCER_FULL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={moreLinkStyle}
+            >
+              Full dataset
+            </a>
+            <a
+              href="https://male-cns.janelia.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={moreLinkStyle}
+            >
+              MaleCNS home
+            </a>
+            </div>
+          </div>
+        )}
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            color: "var(--text-muted)",
+            textAlign: "center",
+            lineHeight: 1.3,
+          }}
+        >
+          CC BY MaleCNS · Janelia FlyEM et al.
         </div>
-      </section>
-
-      <footer
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          color: "var(--text-muted)",
-          textAlign: "center",
-          flexShrink: 0,
-          paddingTop: 1,
-          lineHeight: 1.3,
-        }}
-      >
-        Wiring frozen from MaleCNS · encoder/decoder trained · soma atlas viz
-        (CC BY 4.0 · Janelia FlyEM et al.)
       </footer>
     </div>
   );
@@ -711,7 +879,6 @@ function LegendDot({
 }: {
   color: string;
   label: string;
-  /** Selected region — brighten this legend chip so it matches the lit blob */
   hot?: boolean;
 }) {
   return (
@@ -727,8 +894,8 @@ function LegendDot({
       <span
         aria-hidden
         style={{
-          width: hot ? 8 : 6,
-          height: hot ? 8 : 6,
+          width: hot ? 7 : 5,
+          height: hot ? 7 : 5,
           borderRadius: "50%",
           background: color,
           boxShadow: hot ? `0 0 10px ${color}` : `0 0 5px ${color}`,
@@ -736,44 +903,5 @@ function LegendDot({
       />
       {label}
     </span>
-  );
-}
-
-function WiringRows() {
-  const rows = [
-    { label: "real wiring", value: PROOF.intact, strong: true },
-    { label: "shuffled", value: PROOF.shuffled, strong: false },
-    { label: "zeroed", value: PROOF.zeroed, strong: false },
-  ];
-  return (
-    <div>
-      {rows.map((r) => (
-        <div
-          key={r.label}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            marginBottom: 2,
-            color: r.strong ? "var(--text-primary)" : "var(--text-secondary)",
-            fontWeight: r.strong ? 700 : 500,
-          }}
-        >
-          <span>{r.label}</span>
-          <span>{r.value != null ? `${(r.value * 100).toFixed(1)}%` : "—"}</span>
-        </div>
-      ))}
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          color: "var(--text-muted)",
-          marginTop: 3,
-        }}
-      >
-        match to teacher moves
-      </div>
-    </div>
   );
 }

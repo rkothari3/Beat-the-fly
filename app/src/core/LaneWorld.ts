@@ -22,6 +22,7 @@
  */
 
 import { mulberry32 } from "./rng";
+import { vehicleHitWidth, vehicleTypeCount } from "./vehicleHitboxes";
 
 export type Action = 0 | 1 | 2 | 3; // stay | forward | left | right
 export const ACTION_STAY = 0;
@@ -37,7 +38,10 @@ type FillMode = "empty" | "random";
 export interface Car {
   x: number; // continuous position along the row
   speed: number; // columns per second (signed = direction)
+  /** Hitbox length along drive axis (from mesh bounds). */
   width: number;
+  /** Index into CrossyAssets CAR_IDS / kit.cars — keeps visual + hitbox paired. */
+  vehicleType: number;
 }
 
 export interface Row {
@@ -181,11 +185,16 @@ export class LaneWorld {
   }
 
   /**
-   * Guarantee you can ALWAYS hop out of every clear cell on the previous row.
-   * Why: we don't support going back. The old check only asked "does *some*
-   * previous clear have an exit?" — so you could sidestep into a 1-wide notch
-   * whose forward neighbors are all trees (soft-lock). Now EVERY clear column
-   * on row z-1 must have at least one clear cell in {x-1, x, x+1} on row z.
+   * Guarantee every clear cell on row z-1 can still progress.
+   *
+   * Movement is cardinal only (forward / left / right) — NOT diagonal.
+   * So “a clear cell at (px±1, z)” is NOT an exit from (px, z-1). You must
+   * either hop straight ahead to (px, z), or sidestep on z-1 first to a
+   * column whose straight-ahead cell is clear.
+   *
+   * The old check allowed diagonal “exits,” which made U-traps: trees on
+   * left+right of the fly and a tree straight ahead, with only diagonal
+   * cells open on the next row.
    */
   private ensureForwardPath(trees: number[], z: number) {
     const prevClear = this.clearColumns(z - 1);
@@ -207,7 +216,7 @@ export class LaneWorld {
     // Expo never blocks column 0 in random fill — keep that spine open.
     if (!isClear(0)) removeTree(0);
 
-    // No previous grass (start pad / after road): any clear column is enough.
+    // No previous standing spots (start / missing row): any clear column is enough.
     if (prevClear.length === 0) {
       for (let x = this.minX; x <= this.maxX; x++) {
         if (isClear(x)) return;
@@ -216,39 +225,50 @@ export class LaneWorld {
       return;
     }
 
-    // For each standing spot on the previous row, carve a forward/side exit.
-    for (const px of prevClear) {
-      const hasExit = () =>
-        [-1, 0, 1].some((dx) => isClear(px + dx));
-      if (hasExit()) continue;
+    const prevClearSet = new Set(prevClear);
 
-      // Prefer opening straight ahead, then diagonal neighbors.
-      let carved = false;
-      for (const dx of [0, -1, 1]) {
-        const x = px + dx;
+    /** From `start` on z-1, can we reach a column whose straight-ahead on z is clear? */
+    const canProgress = (start: number): boolean => {
+      const q = [start];
+      const seen = new Set<number>([start]);
+      for (let i = 0; i < q.length; i++) {
+        const x = q[i];
+        // One hop FORWARD from (x, z-1) → (x, z)
+        if (isClear(x)) return true;
+        for (const dx of [-1, 1] as const) {
+          const nx = x + dx;
+          if (nx < this.minX || nx > this.maxX) continue;
+          if (!prevClearSet.has(nx) || seen.has(nx)) continue;
+          seen.add(nx);
+          q.push(nx);
+        }
+      }
+      return false;
+    };
+
+    for (const px of prevClear) {
+      if (canProgress(px)) continue;
+
+      // Prefer opening straight ahead — that alone unsticks a U-pocket.
+      if (removeTree(px) && canProgress(px)) continue;
+
+      // Else open nearby forward cells so a same-row sidestep can escape.
+      for (const x of [px - 1, px + 1, px - 2, px + 2, 0]) {
         if (x < this.minX || x > this.maxX) continue;
-        if (removeTree(x)) {
-          carved = true;
-          break;
-        }
+        removeTree(x);
+        if (canProgress(px)) break;
       }
-      // If that column was already empty of trees but OOB somehow, force px clear.
-      if (!carved && !isClear(px) && px >= this.minX && px <= this.maxX) {
-        // Nothing to remove — land is somehow invalid; wipe row as last resort below.
-      }
-      if (!hasExit()) {
-        // Still trapped (e.g. edge column): open the nearest in-bounds neighbor.
-        for (const x of [px, px - 1, px + 1, px - 2, px + 2]) {
-          if (x < this.minX || x > this.maxX) continue;
-          removeTree(x);
-          if (hasExit()) break;
-        }
+
+      if (!canProgress(px)) {
+        // Last resort: wipe playable trees on this row.
+        trees.length = 0;
+        return;
       }
     }
 
-    // Verify all previous clears can exit; if anything still fails, wipe playable trees.
+    // Final verify — every previous clear must still progress.
     for (const px of prevClear) {
-      if (![-1, 0, 1].some((dx) => isClear(px + dx))) {
+      if (!canProgress(px)) {
         trees.length = 0;
         return;
       }
@@ -278,12 +298,8 @@ export class LaneWorld {
   }
 
   /**
-   * Port of Expo `Row/Road.ts` carGen:
-   *   - 1 or 2 cars (not a packed highway)
-   *   - shared speed/direction per lane
-   *   - spaced ~5–8 units apart starting from off-screen
-   * Speeds converted from Expo's per-frame deltas (~0.02–0.08 @60fps)
-   * into units/second so our fixed dt matches the feel.
+   * Port of Expo `Row/Road.ts` carGen + mesh-measured widths.
+   * Trucks get ~2 unit hitboxes; cars ~1 — matches MagicaVoxel models.
    */
   private placeCarsExpoStyle(cars: Car[]) {
     const xDir = this.rand() < 0.5 ? 1 : -1;
@@ -291,14 +307,36 @@ export class LaneWorld {
     const speedPerSec = (0.02 + this.rand() * 0.06) * 60;
     const speed = speedPerSec * xDir;
     const numCars = Math.floor(this.rand() * 2) + 1; // 1 or 2
-    const width = 0.9;
+
+    // Vehicle types + mesh-measured widths (trucks ~2, cars ~1).
+    const nTypes = vehicleTypeCount();
 
     // Expo starts at -6 * xDir (off-screen on the side they drive from).
     let xPos = -6 * xDir;
     for (let i = 0; i < numCars; i++) {
-      cars.push({ x: xPos, speed, width });
-      // Expo: xPos -= (Math.random() * 3 + 5) * xDir
-      xPos -= (this.rand() * 3 + 5) * xDir;
+      const vehicleType = Math.floor(this.rand() * nTypes);
+      const width = vehicleHitWidth(vehicleType);
+      cars.push({ x: xPos, speed, width, vehicleType });
+      // Space by size so trucks don't overlap each other on spawn.
+      xPos -= (this.rand() * 3 + 5 + width) * xDir;
+    }
+  }
+
+  /**
+   * Expo Road collision:
+   *   collisionBox = heroWidth/2 + vehicleWidth/2 - 0.1
+   * Player dies if |car.x - playerX| < collisionBox.
+   */
+  checkCollision() {
+    const row = this.getRow(this.playerZ);
+    if (!row || row.kind !== "road") return;
+    const heroW = 0.8;
+    for (const car of row.cars) {
+      const collisionBox = heroW / 2 + car.width / 2 - 0.1;
+      if (Math.abs(car.x - this.playerX) < collisionBox) {
+        this.alive = false;
+        return;
+      }
     }
   }
 
@@ -353,7 +391,12 @@ export class LaneWorld {
         kind: row.kind,
         z: row.z,
         trees: row.trees.slice(),
-        cars: row.cars.map((car) => ({ x: car.x, speed: car.speed, width: car.width })),
+        cars: row.cars.map((car) => ({
+          x: car.x,
+          speed: car.speed,
+          width: car.width,
+          vehicleType: car.vehicleType,
+        })),
       });
     }
     return c;
@@ -404,17 +447,6 @@ export class LaneWorld {
       }
     }
     this.checkCollision();
-  }
-
-  checkCollision() {
-    const row = this.getRow(this.playerZ);
-    if (!row || row.kind !== "road") return;
-    for (const car of row.cars) {
-      if (Math.abs(car.x - this.playerX) < (car.width + 0.6) / 2) {
-        this.alive = false;
-        return;
-      }
-    }
   }
 
   /**

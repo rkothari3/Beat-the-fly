@@ -8,16 +8,30 @@ brain/.venv/
 *.pyc
 
 # Large MaleCNS flat files (download with fetch script / curl — do not commit)
-brain/data/*.feather
-brain/data/dataset.jsonl
+brain/data/
+brain/.venv/
 
-# Checkpoints are OK to commit if small; region npz can be regenerated
+# Heavy training weights — keep scripts; app ships bins under app/public/regions/
 brain/checkpoints/*.pt
+# Keep small eval JSON + train logs if present
+!brain/checkpoints/*_eval.json
 
-# Env / secrets
+# Env / secrets — never commit credentials
 .env
 **/.env
 server/.env
+*.env
+*credentials*
+*credentials*.env
+tiger-cloud-db*.env
+
+# Upload / deploy artifacts
+beat-upload.tar
+*.tar
+.ssh/
+**/id_ed25519
+**/id_rsa
+**/vultr_beat
 
 # OS / editor
 .DS_Store

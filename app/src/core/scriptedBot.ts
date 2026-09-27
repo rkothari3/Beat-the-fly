@@ -24,8 +24,8 @@ import {
   LaneWorld,
 } from "./LaneWorld";
 
-/** Ticks between decisions (~250ms at dt=1/30). Must match App DECISION_EVERY_MS feel. */
-export const BOT_TICKS_PER_DECISION = 8;
+/** Ticks between decisions (~300ms at dt=1/30). Keep in sync with App DECISION_EVERY_MS. */
+export const BOT_TICKS_PER_DECISION = 9;
 
 /** Default search depth — the single live opponent (former "hard" depth). */
 export const BOT_LOOKAHEAD_DEPTH = 4;
@@ -40,7 +40,7 @@ export interface BotOptions {
    * Biases root action values by priorStrength * log(prior[a] + eps).
    */
   prior?: Float32Array | number[];
-  /** Weight on log-prior at the root (default 8). */
+  /** Weight on log-prior at the root (default 13). */
   priorStrength?: number;
 }
 
@@ -198,7 +198,7 @@ export function scriptedBot(world: LaneWorld, opts?: BotOptions): Action {
 
   const depth = depthFor(opts);
   const ticks = opts?.ticksPerDecision ?? BOT_TICKS_PER_DECISION;
-  const priorStrength = opts?.priorStrength ?? 8;
+  const priorStrength = opts?.priorStrength ?? 13;
 
   world.ensureLookAhead(depth + 4);
 

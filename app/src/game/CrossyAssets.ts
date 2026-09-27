@@ -1,13 +1,14 @@
 /**
  * MagicaVoxel assets from EvanBacon/Expo-Crossy-Road (MIT).
  *
- * Why: the Vite port temporarily used colored boxes. That lost the real Crossy
- * Road look. These OBJ+PNG pairs ARE that look — nearest-neighbor textures so
- * voxels stay crispy, same as the Expo game.
+ * OBJ+PNG pairs with nearest-neighbor textures — same crispy voxel look as
+ * the Expo game. Also measures vehicle hitbox widths from mesh bounds so
+ * trucks collide like trucks (not skinny cars).
  */
 
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { setVehicleHitWidths } from "../core/vehicleHitboxes";
 
 const BASE = "/models/crossy";
 const textureLoader = new THREE.TextureLoader();
@@ -41,6 +42,19 @@ async function loadTexturedObj(
   return root;
 }
 
+/**
+ * Expo Road.getWidth: length along model Z (before rotate onto the X drive axis).
+ * Rounded so hitboxes stay discrete like the original game.
+ */
+export function measureVehicleWidth(obj: THREE.Object3D): number {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  // Prefer Z (Expo default); fall back to max horizontal if model is rotated oddly.
+  const along = Math.max(size.z, size.x);
+  return Math.max(0.8, Math.round(along * 10) / 10);
+}
+
 export type CrossyKit = {
   grassLight: THREE.Group;
   grassDark: THREE.Group;
@@ -48,12 +62,15 @@ export type CrossyKit = {
   roadBlank: THREE.Group;
   trees: THREE.Group[];
   cars: THREE.Group[];
+  /** Hitbox length along drive axis — same index as `cars`. */
+  carWidths: number[];
+  chicken: THREE.Group;
 };
 
 let kitPromise: Promise<CrossyKit> | null = null;
 let kit: CrossyKit | null = null;
 
-const CAR_IDS = [
+export const CAR_IDS = [
   "police_car",
   "blue_car",
   "blue_truck",
@@ -98,11 +115,29 @@ export function preloadCrossyAssets(): Promise<CrossyKit> {
         )
       )
     );
+    const carWidths = cars.map(measureVehicleWidth);
+    const chicken = await loadTexturedObj(
+      `${BASE}/chicken/0.obj`,
+      `${BASE}/chicken/0.png`
+    );
 
-    kit = { grassLight, grassDark, roadStripes, roadBlank, trees, cars };
+    setVehicleHitWidths(carWidths);
+
+    kit = {
+      grassLight,
+      grassDark,
+      roadStripes,
+      roadBlank,
+      trees,
+      cars,
+      carWidths,
+      chicken,
+    };
     console.log("[crossy] MagicaVoxel kit ready", {
       trees: trees.length,
       cars: cars.length,
+      carWidths,
+      chicken: true,
     });
     return kit;
   })().catch((err) => {
@@ -130,3 +165,6 @@ export function pickIndex(seed: number, len: number): number {
   x = x ^ (x >>> 16);
   return Math.abs(x) % len;
 }
+
+/** Chicken / player half-width used in Expo: heroWidth/2 + vehicleWidth/2 - 0.1 */
+export const HERO_HIT_WIDTH = 0.8;

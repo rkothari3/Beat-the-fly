@@ -70,15 +70,35 @@ export class PathwayEngine {
   }
 
   /**
-   * AL sees real game obs; MB/CX see softObs from upstream logits.
-   * Returned action/logits/probs are CX (steering); stageSpikes from CX for RING/PFN/PFL UI.
+   * AL sees real game obs; MB soft-sees AL logits (pathway story);
+   * CX sees real game obs (board danger). Move probs are a blend of all three
+   * stages — CX alone often collapses to one prior (~54% forward) on quiet
+   * boards, which made the UI bars look frozen.
    */
   step(obs: Float32Array | number[]): PathwayStepResult {
-    const al = this.al.step(obs);
+    const real =
+      obs instanceof Float32Array ? obs : Float32Array.from(obs as number[]);
+    const al = this.al.step(real);
     const mb = this.mb.step(softObsFromLogits(al.logits));
-    const cx = this.cx.step(softObsFromLogits(mb.logits));
+    const cx = this.cx.step(real);
+
+    // Weighted pathway readout for bars + scriptedBot prior.
+    const probs = new Float32Array(4);
+    for (let a = 0; a < 4; a++) {
+      probs[a] = 0.35 * al.probs[a] + 0.25 * mb.probs[a] + 0.4 * cx.probs[a];
+    }
+    let sum = 0;
+    for (let a = 0; a < 4; a++) sum += probs[a];
+    if (sum > 0) {
+      for (let a = 0; a < 4; a++) probs[a] /= sum;
+    }
+    let action = 0;
+    for (let a = 1; a < 4; a++) if (probs[a] > probs[action]) action = a;
+
     return {
       ...cx,
+      action,
+      probs,
       stageResults: {
         antennal_lobe: al,
         mushroom_body: mb,

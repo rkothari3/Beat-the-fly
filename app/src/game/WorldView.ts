@@ -80,13 +80,14 @@ export class WorldView {
     this.scene.background = new THREE.Color(SCENE_COLOR);
 
     // Expo CrossyWorld ambient: intensity 1.8 (bright voxel look).
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.8));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 2.0));
 
     // Match Expo CrossyScene directional light + soft shadows.
-    this.light = new THREE.DirectionalLight(0xffffff, 1.0);
+    this.light = new THREE.DirectionalLight(0xffffff, 1.15);
     this.light.position.set(20, 30, 0.05);
     this.light.castShadow = true;
     this.light.shadow.mapSize.set(2048, 2048);
+    this.light.shadow.radius = 1.5;
     // Slightly wider shadow frustum — we zoomed out, so keep trees/cars lit.
     const d = 22;
     const v = 12;
@@ -204,7 +205,7 @@ export class WorldView {
         live.add(key);
         let mesh = this.carMeshes.get(key);
         if (!mesh) {
-          mesh = this.makeCar(row.z, i, car.speed);
+          mesh = this.makeCar(row.z, i, car.speed, car.vehicleType, car.width);
           this.root.add(mesh);
           this.carMeshes.set(key, mesh);
         }
@@ -307,17 +308,25 @@ export class WorldView {
     return tree;
   }
 
-  private makeCar(rowZ: number, i: number, speed: number): THREE.Object3D {
+  private makeCar(
+    _rowZ: number,
+    _i: number,
+    speed: number,
+    vehicleType: number,
+    hitWidth: number
+  ): THREE.Object3D {
     const kit = this.kit ?? getCrossyKit();
     if (kit && kit.cars.length) {
-      const car = cloneTemplate(
-        kit.cars[pickIndex(rowZ * 97 + i * 13, kit.cars.length)]
-      );
+      const idx =
+        vehicleType >= 0 && vehicleType < kit.cars.length
+          ? vehicleType
+          : 0;
+      const car = cloneTemplate(kit.cars[idx]);
       car.rotation.y = speed >= 0 ? Math.PI / 2 : -Math.PI / 2;
       return car;
     }
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9, 0.55, 0.8),
+      new THREE.BoxGeometry(Math.max(0.9, hitWidth), 0.55, 0.8),
       new THREE.MeshLambertMaterial({ color: 0xf45b69 })
     );
     mesh.castShadow = true;
