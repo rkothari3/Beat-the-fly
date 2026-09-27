@@ -22,7 +22,6 @@ export function ResultsScreen({
   board: LeaderEntry[];
   boardSource: "remote" | "local";
   highlightId?: string;
-  roundSeed?: number;
   onPlayAgain: () => void;
   onBackHome: () => void;
 }) {

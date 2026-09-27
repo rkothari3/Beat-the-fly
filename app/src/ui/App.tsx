@@ -1,8 +1,9 @@
 /**
  * Main demo UI — live match chrome + pathway / region picker overlay.
  *
- * Live pathway (default science mode): AL→MB→CX LIF scores moves, look-ahead
- * search picks the hop (Fly Chess hybrid). Single-region = ablation LIF-only.
+ * Live pathway (default science mode): AL→MB→CX LIF scores moves, brain-weighted
+ * look-ahead search picks the hop (Fly Chess hybrid, priorStrength 18).
+ * Single-region = ablation LIF-only.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +18,7 @@ import { PathwayEngine, PlayMode, isPathway, isRegionKey } from "../brain/Pathwa
 import { BrainPanel } from "./BrainPanel";
 import { RegionPicker, PLAY_MODES, FlyOpponent } from "./RegionPicker";
 import { ResultsScreen } from "./ResultsScreen";
+import { LearnPanel } from "./LearnPanel";
 import { TopBar, ViewportPill } from "./TopBar";
 import {
   LeaderEntry,
@@ -27,7 +29,7 @@ import {
   savePlayerName,
 } from "./leaderboard";
 
-type Phase = "picker" | "playing" | "results";
+type Phase = "picker" | "learn" | "playing" | "results";
 /**
  * Live decision source for the fly.
  * "bot" = look-ahead only.
@@ -261,11 +263,11 @@ export function App() {
             const eng = engineRef.current;
 
             if (controller === "brain" && path && isPathway(playMode)) {
-              // Hybrid: pathway scores nudge look-ahead (priorStrength 13).
+              // Hybrid: pathway scores nudge look-ahead (brain-weighted priorStrength 18).
               const result = path.step(observe(fly));
               action = scriptedBot(fly, {
                 prior: result.probs,
-                priorStrength: 13,
+                priorStrength: 18,
               });
               // Fresh copies so UI bars always see this hop’s CX probs
               // (never a mutated buffer from the next step).
@@ -329,7 +331,7 @@ export function App() {
             split.fly.reset();
           }
         }
-      } else if (phase === "picker") {
+      } else if (phase === "picker" || phase === "learn") {
         acc += dt;
         decisionAcc += dt * 1000;
         const worldDt = human.dt;
@@ -406,7 +408,7 @@ export function App() {
     () => PLAY_MODES.find((r) => r.key === playMode)!,
     [playMode]
   );
-  const showOverlay = phase === "picker" || phase === "results";
+  const showOverlay = phase === "picker" || phase === "learn" || phase === "results";
   const pathwayMode = isPathway(playMode);
   const vizRegion: RegionKey | undefined = isRegionKey(playMode) ? playMode : undefined;
 
@@ -647,9 +649,12 @@ export function App() {
                 onPlayAgain={() => startRound("pathway", "brain")}
                 onBackHome={() => setPhase("picker")}
               />
+            ) : phase === "learn" ? (
+              <LearnPanel onBack={() => setPhase("picker")} />
             ) : (
               <RegionPicker
                 onPick={(r, op) => startRound(r, op)}
+                onLearn={() => setPhase("learn")}
                 playerName={playerName}
                 onPlayerName={updatePlayerName}
                 board={board}

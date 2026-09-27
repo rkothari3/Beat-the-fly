@@ -236,8 +236,8 @@ export const TEACH_TIPS = [
     body: "We freeze the connectome, then train only thin encoders/decoders. Ablations prove it: real wiring ~95% teacher match; shuffled collapses to ~10%.",
   },
   {
-    title: "Why search?",
-    body: "The pathway scores hops; look-ahead search picks a legal, safe move. Brain proposes, search enforces — Fly Chess–style hybrid.",
+    title: "Brain-weighted search",
+    body: "The pathway scores hops; look-ahead search picks a legal, safe move. Brain proposes (priorStrength 18), search enforces — Fly Chess–style hybrid.",
   },
   {
     title: "Central complex",

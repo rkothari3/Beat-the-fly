@@ -184,12 +184,14 @@ function StageDiagramCard({
 
 export function RegionPicker({
   onPick,
+  onLearn,
   playerName,
   onPlayerName,
   board = [],
   boardSource = "local",
 }: {
   onPick: (k: PlayMode, opponent: FlyOpponent) => void;
+  onLearn?: () => void;
   playerName: string;
   onPlayerName: (name: string) => void;
   board?: LeaderEntry[];
@@ -416,6 +418,29 @@ export function RegionPicker({
               Play
             </div>
           </motion.button>
+
+          {onLearn ? (
+            <button
+              type="button"
+              onClick={onLearn}
+              aria-label="Open Learn — how the fly brain works"
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                color: "var(--text-primary)",
+                background: "var(--bg-elevated)",
+                border: "1px solid var(--border-accent)",
+                borderRadius: "var(--radius-pill)",
+                padding: "10px 16px",
+                cursor: "pointer",
+                textAlign: "center",
+              }}
+            >
+              Learn — how it works
+            </button>
+          ) : null}
         </div>
 
         <div
