@@ -1,11 +1,13 @@
 # Deploy Beat the Fly to Vultr on every push to main.
 #
-# Required GitHub Actions secrets (Settings → Secrets → Actions):
-#   VULTR_HOST     — e.g. 66.42.90.228
-#   VULTR_SSH_KEY  — private key whose public half is in root@host ~/.ssh/authorized_keys
+# GitHub → Settings → Secrets and variables → Actions:
+#   VULTR_HOST        = 66.42.90.228
+#   VULTR_SSH_KEY_B64 = base64 of private key (one line)
 #
-# Server must already have: Node 22, nginx, pm2, repo at /var/www/beat-the-fly,
-# and server/.env with DATABASE_URL (Tiger). Never put DB passwords in this workflow.
+# Windows PowerShell — copy the output, paste as VULTR_SSH_KEY_B64:
+#   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.ssh\gha_vultr_deploy"))
+#
+# Tiger DATABASE_URL stays in /var/www/beat-the-fly/server/.env on the box.
 
 name: Deploy to Vultr
 
@@ -22,23 +24,32 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VULTR_HOST }}
-          username: root
-          key: ${{ secrets.VULTR_SSH_KEY }}
-          script_stop: true
-          # Pull + build on the box (region bins live in the repo; Tiger .env stays on server).
-          script: |
-            set -e
-            cd /var/www/beat-the-fly
-            if [ ! -d .git ]; then
-              echo "ERROR: /var/www/beat-the-fly is not a git checkout. Bootstrap once on the server."
-              exit 1
-            fi
-            git fetch origin main
-            git reset --hard origin/main
-            sed -i 's/\r$//' scripts/deploy-vultr.sh
-            chmod +x scripts/deploy-vultr.sh
-            VITE_API_URL=https://www.beattheflyapp.tech ./scripts/deploy-vultr.sh
+      - name: Write SSH key from base64 secret
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VULTR_SSH_KEY_B64 }}" | base64 -d > ~/.ssh/vultr_deploy
+          chmod 600 ~/.ssh/vultr_deploy
+          # Fail fast with a clear message if the secret is empty/wrong
+          if ! grep -q "BEGIN OPENSSH PRIVATE KEY\|BEGIN .*PRIVATE KEY" ~/.ssh/vultr_deploy; then
+            echo "VULTR_SSH_KEY_B64 did not decode to a private key. Re-create the secret."
+            exit 1
+          fi
+          ssh-keyscan -H "${{ secrets.VULTR_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Pull, build, restart on Vultr
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/vultr_deploy -o IdentitiesOnly=yes root@"${{ secrets.VULTR_HOST }}" bash -s <<'EOF'
+          set -e
+          cd /var/www/beat-the-fly
+          if [ ! -d .git ]; then
+            echo "ERROR: /var/www/beat-the-fly is not a git checkout."
+            exit 1
+          fi
+          git fetch origin main
+          git reset --hard origin/main
+          sed -i 's/\r$//' scripts/deploy-vultr.sh
+          chmod +x scripts/deploy-vultr.sh
+          VITE_API_URL=https://www.beattheflyapp.tech ./scripts/deploy-vultr.sh
+          EOF
