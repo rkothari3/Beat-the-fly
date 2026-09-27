@@ -1,5 +1,5 @@
 /**
- * Start screen: title → play | summary → AL|MB|CX diagrams → leaderboard.
+ * Start screen: title → play | summary → Learn strip → AL|MB|CX → leaderboard.
  */
 
 import React from "react";
@@ -15,6 +15,7 @@ import {
 } from "./schematics/CircuitSchematic";
 import { LeaderEntry, randomPlayerName } from "./leaderboard";
 import { LeaderboardPanel } from "./LeaderboardPanel";
+import { LearnStrip } from "./LearnStrip";
 
 export type FlyOpponent = "bot" | "brain";
 
@@ -191,7 +192,8 @@ export function RegionPicker({
   boardSource = "local",
 }: {
   onPick: (k: PlayMode, opponent: FlyOpponent) => void;
-  onLearn?: () => void;
+  /** Deep-dive into full Learn overlay from the in-page Learn strip. */
+  onLearn?: (beatIndex?: number) => void;
   playerName: string;
   onPlayerName: (name: string) => void;
   board?: LeaderEntry[];
@@ -418,29 +420,6 @@ export function RegionPicker({
               Play
             </div>
           </motion.button>
-
-          {onLearn ? (
-            <button
-              type="button"
-              onClick={onLearn}
-              aria-label="Open Learn — how the fly brain works"
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 13,
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                color: "var(--text-primary)",
-                background: "var(--bg-elevated)",
-                border: "1px solid var(--border-accent)",
-                borderRadius: "var(--radius-pill)",
-                padding: "10px 16px",
-                cursor: "pointer",
-                textAlign: "center",
-              }}
-            >
-              Learn — how it works
-            </button>
-          ) : null}
         </div>
 
         <div
@@ -498,6 +477,9 @@ export function RegionPicker({
           </div>
         </div>
       </div>
+
+      {/* Learn curriculum — above AL|MB|CX so education sits in the start flow */}
+      <LearnStrip onExplore={onLearn} />
 
       {/* AL | MB | CX diagram row */}
       <div

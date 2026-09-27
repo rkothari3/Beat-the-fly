@@ -63,6 +63,7 @@ export function App() {
   const pendingHuman = useRef<Action | null>(null);
 
   const [phase, setPhase] = useState<Phase>("picker");
+  const [learnBeatIndex, setLearnBeatIndex] = useState(0);
   const [playMode, setPlayMode] = useState<PlayMode>("pathway");
   const [controller, setController] = useState<FlyController>("bot");
   const [opponent, setOpponent] = useState<FlyOpponent>("brain");
@@ -650,11 +651,17 @@ export function App() {
                 onBackHome={() => setPhase("picker")}
               />
             ) : phase === "learn" ? (
-              <LearnPanel onBack={() => setPhase("picker")} />
+              <LearnPanel
+                initialIndex={learnBeatIndex}
+                onBack={() => setPhase("picker")}
+              />
             ) : (
               <RegionPicker
                 onPick={(r, op) => startRound(r, op)}
-                onLearn={() => setPhase("learn")}
+                onLearn={(beatIndex = 0) => {
+                  setLearnBeatIndex(beatIndex);
+                  setPhase("learn");
+                }}
                 playerName={playerName}
                 onPlayerName={updatePlayerName}
                 board={board}

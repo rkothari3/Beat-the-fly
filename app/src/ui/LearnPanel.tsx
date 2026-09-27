@@ -1,6 +1,6 @@
 /**
  * Full-screen Learn overlay — 5 curriculum beats with one diagram each.
- * Entry: RegionPicker "Learn" button. Back returns to the start screen.
+ * Entry: "Explore →" on the start-screen LearnStrip. Back returns to picker.
  */
 
 import React, { useState } from "react";
@@ -21,8 +21,15 @@ const DIAGRAMS: Record<ScienceBeatId, React.ReactNode> = {
   whyMap: <WhyMapDiagram />,
 };
 
-export function LearnPanel({ onBack }: { onBack: () => void }) {
-  const [index, setIndex] = useState(0);
+export function LearnPanel({
+  onBack,
+  initialIndex = 0,
+}: {
+  onBack: () => void;
+  initialIndex?: number;
+}) {
+  const clamped = Math.max(0, Math.min(SCIENCE_BEATS.length - 1, initialIndex));
+  const [index, setIndex] = useState(clamped);
   const beat = SCIENCE_BEATS[index];
   const n = SCIENCE_BEATS.length;
 
