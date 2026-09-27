@@ -40,13 +40,13 @@ const ROUND_SECONDS = 30;
 /**
  * How often the fly picks a new hop.
  *
- * Why ~300ms (not 720 / not 180):
+ * Why ~260ms (not 720 / not 180):
  *   - The LIF pathway already finishes in one JS call — speed isn’t a language problem.
  *   - 180ms was so fast the AL→MB→CX *animation* never left AL (reset every decision).
- *   - 720ms fixed that but felt sluggish. 300ms + a compressed cascade (~250ms)
- *     keeps the story readable without sandbagging the fly.
+ *   - 300ms felt a bit slow vs humans; 260ms + a ~220ms cascade still finishes the
+ *     atlas story each hop without sandbagging the fly.
  */
-const DECISION_EVERY_MS = 300;
+const DECISION_EVERY_MS = 260;
 
 function opponentToController(op: FlyOpponent): FlyController {
   return op === "brain" ? "brain" : "bot";
@@ -265,11 +265,11 @@ export function App() {
             const eng = engineRef.current;
 
             if (controller === "brain" && path && isPathway(playMode)) {
-              // Hybrid: pathway scores nudge look-ahead (priorStrength 13).
+              // Hybrid: pathway scores nudge look-ahead (priorStrength 10).
               const result = path.step(observe(fly));
               action = scriptedBot(fly, {
                 prior: result.probs,
-                priorStrength: 18,
+                priorStrength: 10,
               });
               // Fresh copies so UI bars always see this hop’s CX probs
               // (never a mutated buffer from the next step).

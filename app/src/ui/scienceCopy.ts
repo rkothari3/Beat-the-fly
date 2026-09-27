@@ -57,7 +57,7 @@ export const SCIENCE_BEATS: ScienceBeat[] = [
     body: [
       "Activity soft-feeds AL → MB → CX so each stage nudges the next without hard one-hots.",
       "CX outputs move probabilities (the sidebar bars). Look-ahead search still enforces legal, safe hops.",
-      "priorStrength 18 makes the brain’s vote heavy — bars propose, badge shows what search acted.",
+      "priorStrength 10 makes the brain’s vote matter — bars propose, badge shows what search acted.",
     ],
     caption: "Cascade → bars (brain) → search (brain-heavy) → badge hop",
   },

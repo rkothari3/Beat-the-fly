@@ -235,7 +235,7 @@ export function CascadeSearchDiagram() {
         ←
       </text>
       <text x={160} y={138} textAnchor="middle" fill={muted} fontSize={8} fontFamily={mono}>
-        priorStrength 18 · badge = acted
+        priorStrength 10 · badge = acted
       </text>
     </Frame>
   );
