@@ -106,10 +106,15 @@ body,
 #root {
   margin: 0;
   height: 100%;
+  /* dvh tracks mobile browser chrome better than % alone. */
+  min-height: 100%;
+  min-height: 100dvh;
   background: var(--bg-app);
   color: var(--text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* Reduce accidental overscroll bounce covering the WebGL canvas. */
+  overscroll-behavior: none;
 }
 
 button {
@@ -141,4 +146,13 @@ button {
 }
 *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Narrow layout helpers used when JS media query and CSS need to agree. */
+@media (max-width: 899px) {
+  /* Larger default tap targets for native form controls. */
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
 }

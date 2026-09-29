@@ -428,6 +428,11 @@ export function BrainPanel(props: {
   /** Soft AL→MB→CX cascade — multi-region atlas glow. */
   pathwayMode?: boolean;
   playMode?: string;
+  /**
+   * Phone match layout: shorter atlas + denser chrome so the live cascade and
+   * hop bars still fit under the split game without stealing the play surface.
+   */
+  compact?: boolean;
 }) {
   const {
     regionKey,
@@ -435,6 +440,7 @@ export function BrainPanel(props: {
     diag,
     liveBrain = false,
     pathwayMode = false,
+    compact = false,
   } = props;
   const reduce = useReducedMotion();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -529,13 +535,16 @@ export function BrainPanel(props: {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 6,
+        gap: compact ? 5 : 6,
         height: "100%",
         minHeight: 0,
-        overflow: "hidden",
-        padding: "6px 10px 5px",
+        overflow: compact ? "auto" : "hidden",
+        WebkitOverflowScrolling: compact ? "touch" : undefined,
+        padding: compact
+          ? "5px 8px calc(5px + env(safe-area-inset-bottom, 0px))"
+          : "6px 10px 5px",
         background: "var(--bg-panel)",
-        boxShadow: "var(--shadow-panel)",
+        boxShadow: compact ? "0 -8px 24px rgba(0,0,0,0.35)" : "var(--shadow-panel)",
       }}
     >
       {/* Header — short title + pathway blurb + LIVE/WATCHING pill */}
@@ -543,15 +552,16 @@ export function BrainPanel(props: {
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "flex-start",
+          alignItems: "center",
           gap: 8,
           flexShrink: 0,
+          width: "100%",
         }}
       >
         <div style={{ minWidth: 0 }}>
           <div
             style={{
-              fontSize: 16,
+              fontSize: compact ? 13 : 16,
               fontWeight: 700,
               color: "var(--text-primary)",
               lineHeight: 1.15,
@@ -596,13 +606,25 @@ export function BrainPanel(props: {
         </div>
       </header>
 
-      {/* Hero atlas — ~55–65% of column; eats space taken from removed cards */}
-      <section
+      {/* Hero atlas — desktop: ~58% of column. Mobile: fixed-height strip beside meters. */}
+      <div
         style={{
+          display: "flex",
+          flexDirection: compact ? "row" : "column",
+          gap: compact ? 6 : 6,
           flex: "1 1 0",
           minHeight: 0,
+          minWidth: 0,
+          overflow: "hidden",
+        }}
+      >
+      <section
+        style={{
+          flex: compact ? "0 0 38%" : "1 1 0",
+          minHeight: 0,
+          minWidth: compact ? 0 : 0,
           // Target ~58% of a typical 900px column content area
-          flexBasis: "58%",
+          flexBasis: compact ? undefined : "58%",
           background: "var(--bg-inset)",
           borderRadius: "var(--radius-lg)",
           border: "1px solid var(--border-subtle)",
@@ -613,6 +635,7 @@ export function BrainPanel(props: {
           overflow: "hidden",
         }}
       >
+        {!compact && (
         <div
           style={{
             display: "flex",
@@ -631,10 +654,13 @@ export function BrainPanel(props: {
             {pathwayMode ? "PATHWAY" : label.toUpperCase()}
           </span>
         </div>
+        )}
         <div
           style={{
             flex: "1 1 0",
-            minHeight: 280,
+            // Desktop atlas needs height to sell the 3D brain; mobile keeps a
+            // readable slice so cascade + hop bars stay above the fold.
+            minHeight: compact ? 96 : 280,
             position: "relative",
             overflow: "hidden",
           }}
@@ -696,6 +722,17 @@ export function BrainPanel(props: {
         </div>
       </section>
 
+      <div
+        style={{
+          flex: compact ? "1 1 0" : undefined,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: compact ? 4 : 6,
+          minHeight: 0,
+          overflow: compact ? "auto" : undefined,
+        }}
+      >
       <CascadeStrip
         diag={diag}
         pathwayMode={pathwayMode}
@@ -725,6 +762,7 @@ export function BrainPanel(props: {
           >
             CHOSEN MOVE
           </div>
+          {!compact && (
           <div
             style={{
               fontFamily: "var(--font-mono)",
@@ -736,6 +774,7 @@ export function BrainPanel(props: {
           >
             bars=brain · badge=acted
           </div>
+          )}
         </div>
         {moveRows.map((row, i) => (
           <DecisionBar
@@ -748,6 +787,8 @@ export function BrainPanel(props: {
           />
         ))}
       </section>
+      </div>
+      </div>
 
       {/* Footer — Explore EM + optional More (wiring proof lives under More) */}
       <footer
@@ -757,8 +798,10 @@ export function BrainPanel(props: {
           flexDirection: "column",
           gap: 5,
           paddingTop: 1,
+          width: "100%",
         }}
       >
+        {!compact && (
         <a
           href={neuroglancerRegionUrl(regionKey)}
           target="_blank"
@@ -768,6 +811,7 @@ export function BrainPanel(props: {
         >
           Explore EM · {pathwayMode ? "Central complex" : label}
         </a>
+        )}
         <button
           type="button"
           onClick={() => setMoreOpen((o) => !o)}
@@ -781,9 +825,10 @@ export function BrainPanel(props: {
             cursor: "pointer",
             padding: "0 4px",
             letterSpacing: "0.06em",
+            minHeight: compact ? 28 : undefined,
           }}
         >
-          {moreOpen ? "▾ LESS" : "▸ MORE"}
+          {moreOpen ? "▾ LESS" : compact ? "▸ MORE · Explore EM" : "▸ MORE"}
         </button>
         {moreOpen && (
           <div
@@ -794,6 +839,17 @@ export function BrainPanel(props: {
               alignItems: "center",
             }}
           >
+            {compact && (
+              <a
+                href={neuroglancerRegionUrl(regionKey)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={ngCtaStyle}
+                title="Opens Neuroglancer (new tab): real MaleCNS EM, this region highlighted"
+              >
+                Explore EM · {pathwayMode ? "Central complex" : label}
+              </a>
+            )}
             <div
               style={{
                 fontFamily: "var(--font-mono)",
@@ -856,6 +912,7 @@ export function BrainPanel(props: {
             </div>
           </div>
         )}
+        {!compact && (
         <div
           style={{
             fontFamily: "var(--font-mono)",
@@ -867,6 +924,7 @@ export function BrainPanel(props: {
         >
           CC BY MaleCNS · Janelia FlyEM et al.
         </div>
+        )}
       </footer>
     </div>
   );

@@ -126,6 +126,8 @@ export function ResultsScreen({
             padding: "12px 20px",
             cursor: "pointer",
             boxShadow: "0 6px 20px rgba(45,212,191,0.25)",
+            minHeight: 48,
+            touchAction: "manipulation",
           }}
         >
           Play again
@@ -142,6 +144,8 @@ export function ResultsScreen({
             borderRadius: "var(--radius-pill)",
             padding: "10px 16px",
             cursor: "pointer",
+            minHeight: 44,
+            touchAction: "manipulation",
           }}
         >
           Back to start
