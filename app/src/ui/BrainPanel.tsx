@@ -428,6 +428,11 @@ export function BrainPanel(props: {
   /** Soft AL→MB→CX cascade — multi-region atlas glow. */
   pathwayMode?: boolean;
   playMode?: string;
+  /**
+   * Phone match layout: shorter atlas + denser chrome so the live cascade and
+   * hop bars still fit under the split game without stealing the play surface.
+   */
+  compact?: boolean;
 }) {
   const {
     regionKey,
@@ -435,6 +440,7 @@ export function BrainPanel(props: {
     diag,
     liveBrain = false,
     pathwayMode = false,
+    compact = false,
   } = props;
   const reduce = useReducedMotion();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -528,14 +534,19 @@ export function BrainPanel(props: {
     <div
       style={{
         display: "flex",
-        flexDirection: "column",
-        gap: 6,
+        flexDirection: compact ? "row" : "column",
+        flexWrap: compact ? "wrap" : undefined,
+        alignContent: compact ? "stretch" : undefined,
+        gap: compact ? 6 : 6,
         height: "100%",
         minHeight: 0,
-        overflow: "hidden",
-        padding: "6px 10px 5px",
+        overflow: compact ? "auto" : "hidden",
+        WebkitOverflowScrolling: compact ? "touch" : undefined,
+        padding: compact
+          ? "6px 8px calc(6px + env(safe-area-inset-bottom, 0px))"
+          : "6px 10px 5px",
         background: "var(--bg-panel)",
-        boxShadow: "var(--shadow-panel)",
+        boxShadow: compact ? "0 -8px 24px rgba(0,0,0,0.35)" : "var(--shadow-panel)",
       }}
     >
       {/* Header — short title + pathway blurb + LIVE/WATCHING pill */}
@@ -546,12 +557,13 @@ export function BrainPanel(props: {
           alignItems: "flex-start",
           gap: 8,
           flexShrink: 0,
+          width: compact ? "100%" : undefined,
         }}
       >
         <div style={{ minWidth: 0 }}>
           <div
             style={{
-              fontSize: 16,
+              fontSize: compact ? 13 : 16,
               fontWeight: 700,
               color: "var(--text-primary)",
               lineHeight: 1.15,
@@ -596,13 +608,14 @@ export function BrainPanel(props: {
         </div>
       </header>
 
-      {/* Hero atlas — ~55–65% of column; eats space taken from removed cards */}
+      {/* Hero atlas — desktop: ~58% of column. Mobile: left strip next to meters. */}
       <section
         style={{
-          flex: "1 1 0",
+          flex: compact ? "1 1 42%" : "1 1 0",
           minHeight: 0,
+          minWidth: compact ? 120 : 0,
           // Target ~58% of a typical 900px column content area
-          flexBasis: "58%",
+          flexBasis: compact ? "42%" : "58%",
           background: "var(--bg-inset)",
           borderRadius: "var(--radius-lg)",
           border: "1px solid var(--border-subtle)",
@@ -634,7 +647,9 @@ export function BrainPanel(props: {
         <div
           style={{
             flex: "1 1 0",
-            minHeight: 280,
+            // Desktop atlas needs height to sell the 3D brain; mobile keeps a
+            // readable slice so cascade + hop bars stay above the fold.
+            minHeight: compact ? 112 : 280,
             position: "relative",
             overflow: "hidden",
           }}
@@ -696,6 +711,16 @@ export function BrainPanel(props: {
         </div>
       </section>
 
+      <div
+        style={{
+          flex: compact ? "1 1 48%" : undefined,
+          minWidth: compact ? 150 : undefined,
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          minHeight: 0,
+        }}
+      >
       <CascadeStrip
         diag={diag}
         pathwayMode={pathwayMode}
@@ -748,6 +773,7 @@ export function BrainPanel(props: {
           />
         ))}
       </section>
+      </div>
 
       {/* Footer — Explore EM + optional More (wiring proof lives under More) */}
       <footer
@@ -757,6 +783,7 @@ export function BrainPanel(props: {
           flexDirection: "column",
           gap: 5,
           paddingTop: 1,
+          width: compact ? "100%" : undefined,
         }}
       >
         <a

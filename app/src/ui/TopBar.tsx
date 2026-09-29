@@ -1,4 +1,5 @@
 import React from "react";
+import { useNarrowLayout } from "./useNarrowLayout";
 
 /** Fly emoji mark in the top bar — reads as the product, not a generic logo. */
 export function BrandMark({ size = 28 }: { size?: number }) {
@@ -41,40 +42,56 @@ export function TopBar({
   /** Hide clock + bar (home + infinite spectate). */
   showTimer?: boolean;
 }) {
+  const narrow = useNarrowLayout();
   const mins = Math.floor(timeLeft / 60);
   const secs = Math.ceil(timeLeft % 60);
   const clock = `${mins}:${secs.toString().padStart(2, "0")}`;
   const progress = Math.max(0, Math.min(1, timeLeft / roundSeconds));
 
+  // Mobile: drop the long subtitle + "rows crossed" caption so brand, score,
+  // and timer stay on one calm row without wrapping into the game viewport.
   return (
     <header
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr auto 1fr",
+        gridTemplateColumns: narrow ? "auto 1fr auto" : "1fr auto 1fr",
         alignItems: "center",
-        gap: 16,
-        padding: "10px 18px",
+        gap: narrow ? 8 : 16,
+        padding: narrow ? "8px 10px" : "10px 18px",
+        // Notch / Dynamic Island: keep brand clear of the status bar.
+        paddingTop: narrow ? "calc(8px + env(safe-area-inset-top, 0px))" : "10px",
         borderBottom: "1px solid var(--border-subtle)",
         background: "var(--bg-panel)",
         flexShrink: 0,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-        <BrandMark />
+      <div style={{ display: "flex", alignItems: "center", gap: narrow ? 6 : 10, minWidth: 0 }}>
+        <BrandMark size={narrow ? 22 : 28} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, letterSpacing: 0.2 }}>Beat the Fly</div>
           <div
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-mono-sm)",
-              color: "var(--text-muted)",
+              fontWeight: 700,
+              fontSize: narrow ? 14 : 16,
+              letterSpacing: 0.2,
               whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
             }}
           >
-            Real MaleCNS connectome · frozen wiring
+            Beat the Fly
           </div>
+          {!narrow && (
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-mono-sm)",
+                color: "var(--text-muted)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              Real MaleCNS connectome · frozen wiring
+            </div>
+          )}
         </div>
       </div>
 
@@ -84,6 +101,7 @@ export function TopBar({
           flexDirection: "column",
           alignItems: "center",
           gap: 2,
+          justifySelf: narrow ? "center" : undefined,
           visibility: showScoreboard ? "visible" : "hidden",
         }}
       >
@@ -91,29 +109,41 @@ export function TopBar({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 16,
+            gap: narrow ? 10 : 16,
             background: "var(--bg-card)",
             border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-pill)",
-            padding: "6px 18px",
+            padding: narrow ? "4px 10px" : "6px 18px",
             boxShadow: "var(--shadow-card)",
           }}
         >
           {!flyScoreOnly && (
-            <ScoreChip color="var(--accent-you)" label="YOU" value={humanScore} />
+            <ScoreChip
+              color="var(--accent-you)"
+              label="YOU"
+              value={humanScore}
+              compact={narrow}
+            />
           )}
-          <ScoreChip color="var(--accent-fly)" label="FLY" value={flyScore} />
+          <ScoreChip
+            color="var(--accent-fly)"
+            label="FLY"
+            value={flyScore}
+            compact={narrow}
+          />
         </div>
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            letterSpacing: "0.04em",
-          }}
-        >
-          {flyScoreOnly ? "watching · rows crossed" : "rows crossed"}
-        </div>
+        {!narrow && (
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              color: "var(--text-muted)",
+              letterSpacing: "0.04em",
+            }}
+          >
+            {flyScoreOnly ? "watching · rows crossed" : "rows crossed"}
+          </div>
+        )}
       </div>
 
       <div
@@ -121,7 +151,7 @@ export function TopBar({
           justifySelf: "end",
           display: "flex",
           alignItems: "center",
-          gap: 14,
+          gap: narrow ? 8 : 14,
         }}
       >
         <div
@@ -133,7 +163,7 @@ export function TopBar({
           <div
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-mono-lg)",
+              fontSize: narrow ? 18 : "var(--text-mono-lg)",
               fontWeight: 600,
               fontVariantNumeric: "tabular-nums",
               lineHeight: 1,
@@ -141,20 +171,22 @@ export function TopBar({
           >
             {clock}
           </div>
+          {!narrow && (
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-mono-sm)",
+                color: "var(--text-muted)",
+                marginTop: 4,
+              }}
+            >
+              round · {roundSeconds} s
+            </div>
+          )}
           <div
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-mono-sm)",
-              color: "var(--text-muted)",
-              marginTop: 4,
-            }}
-          >
-            round · {roundSeconds} s
-          </div>
-          <div
-            style={{
-              marginTop: 6,
-              width: 88,
+              marginTop: narrow ? 4 : 6,
+              width: narrow ? 56 : 88,
               height: 3,
               borderRadius: "var(--radius-pill)",
               background: "var(--bg-inset)",
@@ -184,8 +216,8 @@ export function TopBar({
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 34,
-            height: 34,
+            width: narrow ? 30 : 34,
+            height: narrow ? 30 : 34,
             borderRadius: "var(--radius-md)",
             color: "var(--text-secondary)",
             border: "1px solid var(--border-subtle)",
@@ -202,7 +234,7 @@ export function TopBar({
             e.currentTarget.style.borderColor = "var(--border-subtle)";
           }}
         >
-          <GitHubMark size={18} />
+          <GitHubMark size={narrow ? 16 : 18} />
         </a>
       </div>
     </header>
@@ -228,17 +260,19 @@ function ScoreChip({
   color,
   label,
   value,
+  compact = false,
 }: {
   color: string;
   label: string;
   value: number;
+  compact?: boolean;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: compact ? 5 : 8 }}>
       <span
         style={{
-          width: 8,
-          height: 8,
+          width: compact ? 6 : 8,
+          height: compact ? 6 : 8,
           borderRadius: "50%",
           background: color,
           // No neon glow — player identity dots stay flat (Linear-style restraint).
@@ -247,7 +281,7 @@ function ScoreChip({
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 11,
+          fontSize: compact ? 10 : 11,
           color: "var(--text-secondary)",
           letterSpacing: "0.06em",
         }}
@@ -257,7 +291,7 @@ function ScoreChip({
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 18,
+          fontSize: compact ? 15 : 18,
           fontWeight: 700,
           fontVariantNumeric: "tabular-nums",
         }}

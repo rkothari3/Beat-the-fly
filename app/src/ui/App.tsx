@@ -19,6 +19,8 @@ import { BrainPanel } from "./BrainPanel";
 import { RegionPicker, PLAY_MODES, FlyOpponent } from "./RegionPicker";
 import { ResultsScreen } from "./ResultsScreen";
 import { TopBar, ViewportPill } from "./TopBar";
+import { TouchHopPad } from "./TouchHopPad";
+import { useNarrowLayout } from "./useNarrowLayout";
 import {
   LeaderEntry,
   addLocalEntry,
@@ -60,6 +62,7 @@ export function App() {
   const engineRef = useRef<LifEngine | null>(null);
   const pathwayRef = useRef<PathwayEngine | null>(null);
   const pendingHuman = useRef<Action | null>(null);
+  const narrow = useNarrowLayout();
 
   const [phase, setPhase] = useState<Phase>("picker");
   const [playMode, setPlayMode] = useState<PlayMode>("pathway");
@@ -118,14 +121,29 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (phase !== "playing" || !humanCompete) return;
       const k = e.key.toLowerCase();
-      if (k === "arrowup" || k === "w") pendingHuman.current = ACTION_FORWARD;
-      else if (k === "arrowleft" || k === "a") pendingHuman.current = ACTION_LEFT;
-      else if (k === "arrowright" || k === "d") pendingHuman.current = ACTION_RIGHT;
-      else if (k === " ") pendingHuman.current = ACTION_STAY;
+      if (k === "arrowup" || k === "w") {
+        e.preventDefault();
+        pendingHuman.current = ACTION_FORWARD;
+      } else if (k === "arrowleft" || k === "a") {
+        e.preventDefault();
+        pendingHuman.current = ACTION_LEFT;
+      } else if (k === "arrowright" || k === "d") {
+        e.preventDefault();
+        pendingHuman.current = ACTION_RIGHT;
+      } else if (k === " ") {
+        // Space scrolls the page on many browsers — block that during a match.
+        e.preventDefault();
+        pendingHuman.current = ACTION_STAY;
+      }
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, { passive: false });
     return () => window.removeEventListener("keydown", onKey);
   }, [phase, humanCompete]);
+
+  function queueHumanHop(action: Action) {
+    if (phase !== "playing" || !humanCompete) return;
+    pendingHuman.current = action;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -430,6 +448,8 @@ export function App() {
         width: "100%",
         overflow: "hidden",
         background: "var(--bg-app)",
+        // iOS Safari: fill the visual viewport including safe areas.
+        minHeight: "100dvh",
       }}
     >
       <TopBar
@@ -447,7 +467,11 @@ export function App() {
           style={{
             height: "100%",
             display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
+            // Desktop: 2/3 game + 1/3 brain side-by-side (product chrome).
+            // Mobile: stack — full-width split game on top, live brain under it
+            // so each half stays playable and the connectome story stays visible.
+            gridTemplateColumns: narrow ? "1fr" : "1fr 1fr 1fr",
+            gridTemplateRows: narrow ? "minmax(0, 1.35fr) minmax(200px, 0.9fr)" : "1fr",
             minHeight: 0,
             minWidth: 0,
             overflow: "hidden",
@@ -455,10 +479,13 @@ export function App() {
         >
           <div
             style={{
-              gridColumn: "1 / 3",
+              gridColumn: narrow ? "1" : "1 / 3",
+              gridRow: narrow ? "1" : undefined,
               position: "relative",
               minWidth: 0,
               minHeight: 0,
+              // Stop browser gestures from eating hops / pinch-zooming the canvas.
+              touchAction: "none",
             }}
           >
             <canvas
@@ -468,6 +495,7 @@ export function App() {
                 width: "100%",
                 height: "100%",
                 background: "#0a0c10",
+                touchAction: "none",
               }}
             />
             {/* Greyscale lock on YOU when playing without a name */}
@@ -499,12 +527,25 @@ export function App() {
               }}
             >
               <div style={{ position: "relative" }}>
-                <ViewportPill color="var(--accent-you)">YOU</ViewportPill>
+                <ViewportPill
+                  color="var(--accent-you)"
+                  style={narrow ? { margin: "8px 0 0 8px" } : undefined}
+                >
+                  YOU
+                </ViewportPill>
               </div>
               <div style={{ position: "relative" }}>
-                <ViewportPill color="var(--accent-fly)">FLY</ViewportPill>
+                <ViewportPill
+                  color="var(--accent-fly)"
+                  style={narrow ? { margin: "8px 0 0 8px" } : undefined}
+                >
+                  FLY
+                </ViewportPill>
               </div>
             </div>
+            {phase === "playing" && humanCompete && narrow && (
+              <TouchHopPad onHop={queueHumanHop} />
+            )}
             {phase === "playing" && !humanCompete && (
               <div
                 style={{
@@ -517,7 +558,7 @@ export function App() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  padding: 16,
+                  padding: narrow ? 10 : 16,
                   boxSizing: "border-box",
                   pointerEvents: "none",
                 }}
@@ -525,16 +566,16 @@ export function App() {
                 <div
                   style={{
                     width: "100%",
-                    maxWidth: 300,
+                    maxWidth: narrow ? 220 : 300,
                     pointerEvents: "auto",
                     background: "var(--bg-elevated)",
                     border: "1px solid var(--border-accent)",
                     borderRadius: "var(--radius-lg)",
-                    padding: "16px 18px",
+                    padding: narrow ? "12px 12px" : "16px 18px",
                     boxShadow: "0 12px 40px rgba(0,0,0,0.55)",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 12,
+                    gap: narrow ? 8 : 12,
                     textAlign: "center",
                   }}
                 >
@@ -551,7 +592,7 @@ export function App() {
                   </div>
                   <div
                     style={{
-                      fontSize: 17,
+                      fontSize: narrow ? 15 : 17,
                       fontWeight: 700,
                       color: "var(--text-primary)",
                       lineHeight: 1.25,
@@ -562,23 +603,25 @@ export function App() {
                   <p
                     style={{
                       margin: 0,
-                      fontSize: 13,
+                      fontSize: narrow ? 12 : 13,
                       color: "var(--text-secondary)",
                       lineHeight: 1.45,
                     }}
                   >
                     Enter a name on the home screen to compete and join the leaderboard.
                   </p>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    You&apos;re only watching — the fly side stays clear.
-                  </p>
+                  {!narrow && (
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 12,
+                        color: "var(--text-muted)",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      You&apos;re only watching — the fly side stays clear.
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => setPhase("picker")}
@@ -594,6 +637,7 @@ export function App() {
                       padding: "10px 16px",
                       cursor: "pointer",
                       width: "100%",
+                      minHeight: 44,
                     }}
                   >
                     ← Back
@@ -605,13 +649,15 @@ export function App() {
 
           <aside
             style={{
-              gridColumn: "3",
+              gridColumn: narrow ? "1" : "3",
+              gridRow: narrow ? "2" : undefined,
               minWidth: 0,
               minHeight: 0,
-              borderLeft: "1px solid var(--border-subtle)",
+              borderLeft: narrow ? "none" : "1px solid var(--border-subtle)",
+              borderTop: narrow ? "1px solid var(--border-subtle)" : "none",
               overflow: "hidden",
               background: "var(--bg-panel)",
-              boxShadow: "var(--shadow-panel)",
+              boxShadow: narrow ? undefined : "var(--shadow-panel)",
             }}
           >
             <BrainPanel
@@ -625,6 +671,7 @@ export function App() {
               }
               liveBrain={controller === "brain"}
               pathwayMode={pathwayMode}
+              compact={narrow}
             />
           </aside>
         </div>
@@ -640,9 +687,13 @@ export function App() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "center",
-              padding: "16px 28px 20px",
-              overflow: "hidden",
+              justifyContent: narrow ? "flex-start" : "center",
+              padding: narrow ? "12px 14px 16px" : "16px 28px 20px",
+              paddingBottom: narrow
+                ? "calc(16px + env(safe-area-inset-bottom, 0px))"
+                : "20px",
+              overflow: narrow ? "auto" : "hidden",
+              WebkitOverflowScrolling: narrow ? "touch" : undefined,
               width: "100%",
               boxSizing: "border-box",
             }}

@@ -2,7 +2,7 @@
  * Start screen layout:
  *   Header — pathway one-liner + title
  *   L1 — Name + random + Play + hop hint
- *   L2 — Video 30% | Learn 70%
+ *   L2 — Video | Learn  (side-by-side desktop; stacked on phone)
  *   L3 — Leaderboard
  */
 
@@ -11,6 +11,7 @@ import { PlayMode } from "../brain/PathwayEngine";
 import { LeaderEntry, randomPlayerName } from "./leaderboard";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { LearnHomeBlock } from "./LearnHomeBlock";
+import { useNarrowLayout } from "./useNarrowLayout";
 
 export type FlyOpponent = "bot" | "brain";
 
@@ -49,6 +50,7 @@ export function RegionPicker({
   stats?: { region: string; matches: number; fly_wins: number }[];
 }) {
   const play = () => onPick("pathway", "brain");
+  const narrow = useNarrowLayout();
 
   return (
     <div
@@ -58,18 +60,19 @@ export function RegionPicker({
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
-        gap: 14,
+        gap: narrow ? 12 : 14,
         minHeight: 0,
-        maxHeight: "100%",
-        overflow: "hidden",
-        padding: "0 4px 8px",
+        // Mobile overlay scrolls; desktop keeps the lock-to-viewport demo feel.
+        maxHeight: narrow ? "none" : "100%",
+        overflow: narrow ? "visible" : "hidden",
+        padding: narrow ? "0 0 12px" : "0 4px 8px",
       }}
     >
       <div style={{ flexShrink: 0 }}>
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 12,
+            fontSize: narrow ? 11 : 12,
             letterSpacing: "0.02em",
             color: "var(--text-secondary)",
             lineHeight: 1.35,
@@ -80,7 +83,7 @@ export function RegionPicker({
         <h2
           style={{
             margin: "4px 0 0",
-            fontSize: 26,
+            fontSize: narrow ? 22 : 26,
             fontWeight: 700,
             color: "var(--text-primary)",
             lineHeight: 1.2,
@@ -126,6 +129,8 @@ export function RegionPicker({
             value={playerName}
             maxLength={24}
             placeholder="Anonymous"
+            autoComplete="nickname"
+            enterKeyHint="go"
             onChange={(e) => onPlayerName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") play();
@@ -133,14 +138,15 @@ export function RegionPicker({
             style={{
               flex: 1,
               fontFamily: "var(--font-mono)",
-              fontSize: 13,
+              fontSize: 16, // ≥16px avoids iOS focus-zoom
               color: "var(--text-primary)",
               background: "var(--bg-inset)",
               border: "1px solid var(--border-subtle)",
               borderRadius: "var(--radius-md)",
-              padding: "8px 10px",
+              padding: "10px 12px",
               outline: "none",
               minWidth: 0,
+              minHeight: 44,
             }}
           />
           <button
@@ -150,8 +156,8 @@ export function RegionPicker({
             onClick={() => onPlayerName(randomPlayerName())}
             style={{
               flexShrink: 0,
-              width: 36,
-              height: 36,
+              width: 44,
+              height: 44,
               display: "grid",
               placeItems: "center",
               color: "var(--text-primary)",
@@ -160,6 +166,7 @@ export function RegionPicker({
               borderRadius: "var(--radius-md)",
               cursor: "pointer",
               padding: 0,
+              touchAction: "manipulation",
             }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -185,6 +192,7 @@ export function RegionPicker({
           aria-label="Play full pathway AL to MB to CX"
           style={{
             flexShrink: 0,
+            flex: narrow ? "1 1 120px" : undefined,
             fontFamily: "var(--font-mono)",
             fontSize: 13,
             fontWeight: 700,
@@ -193,10 +201,11 @@ export function RegionPicker({
             background: "var(--accent-teal)",
             border: "none",
             borderRadius: "var(--radius-pill)",
-            padding: "10px 22px",
+            padding: narrow ? "12px 22px" : "10px 22px",
             cursor: "pointer",
             boxShadow: "0 6px 20px rgba(45,212,191,0.25)",
-            minHeight: 36,
+            minHeight: 44,
+            touchAction: "manipulation",
           }}
         >
           Play
@@ -205,6 +214,7 @@ export function RegionPicker({
         <div
           style={{
             flexShrink: 0,
+            flex: narrow ? "1 1 100%" : undefined,
             fontFamily: "var(--font-mono)",
             fontSize: 12,
             color: "var(--text-secondary)",
@@ -213,73 +223,126 @@ export function RegionPicker({
             background: "var(--bg-inset)",
             border: "1px solid var(--border-subtle)",
             borderRadius: "var(--radius-md)",
-            whiteSpace: "nowrap",
+            whiteSpace: narrow ? "normal" : "nowrap",
+            textAlign: narrow ? "center" : undefined,
           }}
         >
-          ← ↑ → to hop
+          {narrow ? "Tap ↑ ← · → to hop" : "← ↑ → to hop"}
         </div>
       </div>
 
-      {/* Line 2 — Video sets height; Learn fills same box and scrolls inside */}
-      <div
-        style={{
-          position: "relative",
-          flexShrink: 0,
-          width: "100%",
-          // Video width = min(30% of row, 280px); ~20% taller than square.
-          // Learn is absolutely positioned so it cannot grow this row.
-        }}
-      >
+      {/* Line 2 — Desktop: video sets height, Learn fills. Mobile: stack. */}
+      {narrow ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            width: "100%",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              width: "100%",
+              aspectRatio: "16 / 10",
+              maxHeight: 220,
+              borderRadius: "var(--radius-lg)",
+              overflow: "hidden",
+              border: "1px solid var(--border-subtle)",
+              background: "#0a0e14",
+              boxShadow: "var(--shadow-card)",
+            }}
+          >
+            <video
+              src="/videos/home-loop.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              aria-label="Connectome demo loop"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                objectPosition: "center",
+              }}
+            />
+          </div>
+          <LearnHomeBlock />
+        </div>
+      ) : (
         <div
           style={{
             position: "relative",
-            width: "min(30%, 280px)",
-            aspectRatio: "1 / 1.2",
-            borderRadius: "var(--radius-lg)",
-            overflow: "hidden",
-            border: "1px solid var(--border-subtle)",
-            background: "#0a0e14",
-            boxShadow: "var(--shadow-card)",
+            flexShrink: 0,
+            width: "100%",
+            // Video width = min(30% of row, 280px); ~20% taller than square.
+            // Learn is absolutely positioned so it cannot grow this row.
           }}
         >
-          <video
-            src="/videos/home-loop.mp4"
-            autoPlay
-            muted
-            loop
-            playsInline
-            aria-label="Connectome demo loop"
+          <div
+            style={{
+              position: "relative",
+              width: "min(30%, 280px)",
+              aspectRatio: "1 / 1.2",
+              borderRadius: "var(--radius-lg)",
+              overflow: "hidden",
+              border: "1px solid var(--border-subtle)",
+              background: "#0a0e14",
+              boxShadow: "var(--shadow-card)",
+            }}
+          >
+            <video
+              src="/videos/home-loop.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              aria-label="Connectome demo loop"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                objectPosition: "center",
+              }}
+            />
+          </div>
+
+          <div
             style={{
               position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition: "center",
+              top: 0,
+              bottom: 0,
+              left: "calc(min(30%, 280px) + 14px)",
+              right: 0,
+              display: "flex",
+              flexDirection: "column",
+              minWidth: 0,
+              minHeight: 0,
+              overflow: "hidden",
             }}
-          />
+          >
+            <LearnHomeBlock fillHeight />
+          </div>
         </div>
-
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: "calc(min(30%, 280px) + 14px)",
-            right: 0,
-            display: "flex",
-            flexDirection: "column",
-            minWidth: 0,
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          <LearnHomeBlock fillHeight />
-        </div>
-      </div>
+      )}
 
       {/* Line 3 — Leaderboard */}
-      <div style={{ flexShrink: 0, minHeight: 0, maxHeight: 200, overflow: "auto" }}>
+      <div
+        style={{
+          flexShrink: 0,
+          minHeight: 0,
+          maxHeight: narrow ? 280 : 200,
+          overflow: "auto",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
         <LeaderboardPanel entries={board} source={boardSource} compact />
       </div>
     </div>

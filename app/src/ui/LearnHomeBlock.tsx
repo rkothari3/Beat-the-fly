@@ -9,6 +9,7 @@ import {
   MbCircuitSchematic,
 } from "./schematics/CircuitSchematic";
 import { NEUROGLANCER_PATHWAY_URL } from "./neuroglancerLinks";
+import { useNarrowLayout } from "./useNarrowLayout";
 
 const card: React.CSSProperties = {
   background: "var(--bg-card)",
@@ -126,13 +127,14 @@ function RecipeDiagram() {
 }
 
 function ProofDiagram() {
+  const narrow = useNarrowLayout();
   return (
     <div
       style={{
         width: "95%",
         margin: "0 auto",
         display: "grid",
-        gridTemplateColumns: "1fr 1fr",
+        gridTemplateColumns: narrow ? "1fr" : "1fr 1fr",
         gap: 10,
       }}
     >
@@ -289,12 +291,15 @@ function StepRecipe() {
 }
 
 function StepRegions() {
+  const narrow = useNarrowLayout();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.1fr)",
+          gridTemplateColumns: narrow
+            ? "1fr"
+            : "minmax(0, 0.9fr) minmax(0, 1.1fr)",
           gap: 12,
           alignItems: "start",
         }}
@@ -333,7 +338,13 @@ function StepRegions() {
           </li>
         </ul>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: narrow ? "1fr" : "repeat(3, minmax(0, 1fr))",
+          gap: 8,
+        }}
+      >
         <RegionMini
           label="AL"
           color="#8cff59"
@@ -413,11 +424,13 @@ const PANELS = [StepRecipe, StepRegions, StepCascade, StepProof, StepWhy];
 export function LearnHomeBlock({ fillHeight = false }: { fillHeight?: boolean }) {
   const [step, setStep] = useState(0);
   const Panel = PANELS[step] ?? StepRecipe;
+  const narrow = useNarrowLayout();
 
   return (
     <div
       style={{
         ...card,
+        padding: narrow ? "12px 12px" : card.padding,
         ...(fillHeight
           ? {
               height: "100%",
@@ -464,15 +477,17 @@ export function LearnHomeBlock({ fillHeight = false }: { fillHeight?: boolean })
               title={s.title}
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: narrow ? 10 : 11,
                 fontWeight: 700,
                 letterSpacing: "0.04em",
-                padding: "8px 12px",
+                padding: narrow ? "10px 10px" : "8px 12px",
                 borderRadius: "var(--radius-pill)",
                 cursor: "pointer",
                 border: active ? "1px solid var(--border-accent)" : "1px solid var(--border-subtle)",
                 background: active ? "rgba(45,212,191,0.14)" : "var(--bg-inset)",
                 color: active ? "var(--accent-teal)" : "var(--text-secondary)",
+                minHeight: 40,
+                touchAction: "manipulation",
               }}
             >
               {s.short}
