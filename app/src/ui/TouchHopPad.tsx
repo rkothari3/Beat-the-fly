@@ -14,14 +14,14 @@ import React from "react";
 import { ACTION_FORWARD, ACTION_LEFT, ACTION_RIGHT, ACTION_STAY, Action } from "../core/LaneWorld";
 
 const BTN: React.CSSProperties = {
-  width: 52,
-  height: 52,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(10,12,16,0.72)",
+  width: 46,
+  height: 46,
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.18)",
+  background: "rgba(10,12,16,0.62)",
   color: "var(--text-primary)",
   fontFamily: "var(--font-mono)",
-  fontSize: 18,
+  fontSize: 17,
   fontWeight: 700,
   lineHeight: 1,
   display: "grid",
@@ -31,7 +31,7 @@ const BTN: React.CSSProperties = {
   WebkitTapHighlightColor: "transparent",
   backdropFilter: "blur(8px)",
   WebkitBackdropFilter: "blur(8px)",
-  boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
   userSelect: "none",
   padding: 0,
 };
@@ -88,7 +88,7 @@ export function TouchHopPad({
         display: "flex",
         justifyContent: "center",
         alignItems: "flex-end",
-        padding: "0 8px calc(10px + env(safe-area-inset-bottom, 0px))",
+        padding: "0 8px calc(8px + env(safe-area-inset-bottom, 0px))",
         pointerEvents: "none",
         boxSizing: "border-box",
       }}
@@ -97,9 +97,9 @@ export function TouchHopPad({
         style={{
           pointerEvents: "auto",
           display: "grid",
-          gridTemplateColumns: "52px 52px 52px",
-          gridTemplateRows: "52px 52px",
-          gap: 8,
+          gridTemplateColumns: "46px 46px 46px",
+          gridTemplateRows: "46px 46px",
+          gap: 7,
           justifyItems: "center",
         }}
       >

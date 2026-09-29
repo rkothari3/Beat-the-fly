@@ -471,7 +471,8 @@ export function App() {
             // Mobile: stack — full-width split game on top, live brain under it
             // so each half stays playable and the connectome story stays visible.
             gridTemplateColumns: narrow ? "1fr" : "1fr 1fr 1fr",
-            gridTemplateRows: narrow ? "minmax(0, 1.35fr) minmax(200px, 0.9fr)" : "1fr",
+            // Bias height to the play surface — brain stays visible but secondary.
+            gridTemplateRows: narrow ? "minmax(0, 1.75fr) minmax(168px, 0.72fr)" : "1fr",
             minHeight: 0,
             minWidth: 0,
             overflow: "hidden",
