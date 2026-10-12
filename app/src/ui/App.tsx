@@ -42,15 +42,11 @@ const ROUND_SECONDS = 30;
 /**
  * How often the fly picks a new hop.
  *
- * Floor without compromising the atlas cascade:
- *   - Bot search uses whole world ticks (dt = 1/30), so the hop period must be
- *     N/30 seconds. N=5 → ~167ms is the fastest integer tick that still leaves
- *     room for a full AL→MB→CX pulse (~150ms) before the next decision resets it.
- *   - N=4 (~133ms) cuts the cascade mid-flight (same failure mode as the old 180ms
- *     with a longer pulse) — don't go there.
- * Keep in sync with BOT_TICKS_PER_DECISION.
+ * Absolute maximum: re-decide every animation frame (~1ms threshold so any
+ * real frame triggers). Atlas cascade will not keep up. Look-ahead search
+ * still uses BOT_TICKS_PER_DECISION for planning horizon.
  */
-const DECISION_EVERY_MS = Math.round((5 / 30) * 1000); // ≈167ms
+const DECISION_EVERY_MS = 1;
 
 function opponentToController(op: FlyOpponent): FlyController {
   return op === "brain" ? "brain" : "bot";

@@ -24,7 +24,11 @@ import {
   LaneWorld,
 } from "./LaneWorld";
 
-/** Ticks between decisions (~167ms at dt=1/30). Keep in sync with App DECISION_EVERY_MS. */
+/**
+ * Simulated ticks between hops inside look-ahead (~167ms at dt=1/30).
+ * Kept separate from App DECISION_EVERY_MS so live act rate can be maxed
+ * without shrinking how far search looks.
+ */
 export const BOT_TICKS_PER_DECISION = 5;
 
 /** Default search depth — the single live opponent (former "hard" depth). */
