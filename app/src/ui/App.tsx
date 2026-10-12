@@ -42,13 +42,15 @@ const ROUND_SECONDS = 30;
 /**
  * How often the fly picks a new hop.
  *
- * Why ~200ms (not 260 / not 180):
- *   - Faster than 260ms so the fly presses humans harder in a 30s round.
- *   - 180ms was so fast the AL→MB→CX *animation* never left AL (reset every decision).
- *   - 200ms + a ~170ms cascade still finishes the atlas story each hop.
- * Keep in sync with BOT_TICKS_PER_DECISION (6 × 1/30s ≈ 200ms).
+ * Floor without compromising the atlas cascade:
+ *   - Bot search uses whole world ticks (dt = 1/30), so the hop period must be
+ *     N/30 seconds. N=5 → ~167ms is the fastest integer tick that still leaves
+ *     room for a full AL→MB→CX pulse (~150ms) before the next decision resets it.
+ *   - N=4 (~133ms) cuts the cascade mid-flight (same failure mode as the old 180ms
+ *     with a longer pulse) — don't go there.
+ * Keep in sync with BOT_TICKS_PER_DECISION.
  */
-const DECISION_EVERY_MS = 200;
+const DECISION_EVERY_MS = Math.round((5 / 30) * 1000); // ≈167ms
 
 function opponentToController(op: FlyOpponent): FlyController {
   return op === "brain" ? "brain" : "bot";
