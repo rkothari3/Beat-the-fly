@@ -445,8 +445,8 @@ export function BrainPanel(props: {
   const reduce = useReducedMotion();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // Stagger pulse: compressed AL→MB→CX (~220ms) so it finishes inside
-  // DECISION_EVERY_MS (~260) — brain still runs all three stages every hop.
+  // Stagger pulse: compressed AL→MB→CX (~170ms) so it finishes inside
+  // DECISION_EVERY_MS (~200) — brain still runs all three stages every hop.
   const [pulseGen, setPulseGen] = useState(0);
   const [activeStage, setActiveStage] = useState(-1);
   const [movePulse, setMovePulse] = useState(false);
@@ -508,12 +508,12 @@ export function BrainPanel(props: {
     if (pathwayMode) {
       setActiveStage(0);
       timers.push(
-        window.setTimeout(() => setActiveStage(1), 75),
-        window.setTimeout(() => setActiveStage(2), 150),
+        window.setTimeout(() => setActiveStage(1), 55),
+        window.setTimeout(() => setActiveStage(2), 110),
         window.setTimeout(() => {
           setActiveStage(2);
           setMovePulse(true);
-        }, 220)
+        }, 170)
       );
     } else {
       const idx = STAGE_META.findIndex((m) => m.key === regionKey);

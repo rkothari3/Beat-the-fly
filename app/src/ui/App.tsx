@@ -42,13 +42,13 @@ const ROUND_SECONDS = 30;
 /**
  * How often the fly picks a new hop.
  *
- * Why ~260ms (not 720 / not 180):
- *   - The LIF pathway already finishes in one JS call — speed isn’t a language problem.
+ * Why ~200ms (not 260 / not 180):
+ *   - Faster than 260ms so the fly presses humans harder in a 30s round.
  *   - 180ms was so fast the AL→MB→CX *animation* never left AL (reset every decision).
- *   - 300ms felt a bit slow vs humans; 260ms + a ~220ms cascade still finishes the
- *     atlas story each hop without sandbagging the fly.
+ *   - 200ms + a ~170ms cascade still finishes the atlas story each hop.
+ * Keep in sync with BOT_TICKS_PER_DECISION (6 × 1/30s ≈ 200ms).
  */
-const DECISION_EVERY_MS = 260;
+const DECISION_EVERY_MS = 200;
 
 function opponentToController(op: FlyOpponent): FlyController {
   return op === "brain" ? "brain" : "bot";

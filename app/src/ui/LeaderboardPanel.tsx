@@ -12,7 +12,8 @@ export function LeaderboardPanel({
   highlightId?: string;
   compact?: boolean;
 }) {
-  const top = entries.slice(0, compact ? 5 : 10);
+  // Compact home/results: top 4 only (drop the old 5th slot so the board stays short).
+  const top = entries.slice(0, compact ? 4 : 10);
 
   return (
     <div
