@@ -445,8 +445,8 @@ export function BrainPanel(props: {
   const reduce = useReducedMotion();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // Stagger pulse: best-effort AL→MB→CX. Live hop rate may be faster than this
-  // cascade (~150ms); stages can reset mid-flight — gameplay speed wins.
+  // Stagger pulse: AL→MB→CX (~150ms) so it finishes inside DECISION_EVERY_MS
+  // (~167). Equal ~50ms steps keep the cascade readable at max hop rate.
   const [pulseGen, setPulseGen] = useState(0);
   const [activeStage, setActiveStage] = useState(-1);
   const [movePulse, setMovePulse] = useState(false);
