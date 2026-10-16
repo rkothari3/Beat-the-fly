@@ -1,10 +1,18 @@
 /**
  * Post-round screen: score roast → leaderboard → play again.
+ * Loss: brief roast, then redirect to the consolation YouTube clip.
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { LeaderEntry } from "./leaderboard";
 import { LeaderboardPanel } from "./LeaderboardPanel";
+
+/** Consolation redirect when the fly outscores the human (not on ties). */
+const LOSE_REDIRECT_URL =
+  "https://m.youtube.com/watch?v=8hN8cVe3hzU&pp=ygUTbW9tbXkgYXNtciBnb29kIGJveQ%3D%3D&ra=m";
+
+/** Let the roast land before navigating away. */
+const LOSE_REDIRECT_DELAY_MS = 1400;
 
 export function ResultsScreen({
   humanScore,
@@ -28,12 +36,21 @@ export function ResultsScreen({
 }) {
   const won = humanScore > flyScore;
   const tie = humanScore === flyScore;
+  const lost = !won && !tie;
   const headline = tie ? "Tie!" : won ? "You beat the fly" : "The fly wins";
   const roast = tie
     ? "Even with a fruit fly. Respectfully, rematch."
     : won
       ? "Ts not tuff — you just beat a fly."
       : "C'mon, you can't even beat a fly?";
+
+  useEffect(() => {
+    if (!lost) return;
+    const t = window.setTimeout(() => {
+      window.location.assign(LOSE_REDIRECT_URL);
+    }, LOSE_REDIRECT_DELAY_MS);
+    return () => window.clearTimeout(t);
+  }, [lost]);
 
   return (
     <div
@@ -102,36 +119,76 @@ export function ResultsScreen({
         >
           {roast}
         </p>
+        {lost && (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--text-muted)",
+              letterSpacing: "0.04em",
+            }}
+          >
+            Sending you somewhere softer…
+          </p>
+        )}
       </div>
 
-      <LeaderboardPanel
-        entries={board}
-        source={boardSource}
-        highlightId={highlightId}
-        compact
-      />
+      {!lost && (
+        <LeaderboardPanel
+          entries={board}
+          source={boardSource}
+          highlightId={highlightId}
+          compact
+        />
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <button
-          type="button"
-          onClick={onPlayAgain}
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 14,
-            fontWeight: 700,
-            color: "#052e28",
-            background: "var(--accent-teal)",
-            border: "none",
-            borderRadius: "var(--radius-pill)",
-            padding: "12px 20px",
-            cursor: "pointer",
-            boxShadow: "0 6px 20px rgba(45,212,191,0.25)",
-            minHeight: 48,
-            touchAction: "manipulation",
-          }}
-        >
-          Play again
-        </button>
+        {lost ? (
+          <a
+            href={LOSE_REDIRECT_URL}
+            style={{
+              display: "block",
+              textAlign: "center",
+              fontFamily: "var(--font-mono)",
+              fontSize: 14,
+              fontWeight: 700,
+              color: "#052e28",
+              background: "var(--accent-teal)",
+              border: "none",
+              borderRadius: "var(--radius-pill)",
+              padding: "12px 20px",
+              textDecoration: "none",
+              boxShadow: "0 6px 20px rgba(45,212,191,0.25)",
+              minHeight: 48,
+              lineHeight: "24px",
+              touchAction: "manipulation",
+            }}
+          >
+            Take me there now
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={onPlayAgain}
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 14,
+              fontWeight: 700,
+              color: "#052e28",
+              background: "var(--accent-teal)",
+              border: "none",
+              borderRadius: "var(--radius-pill)",
+              padding: "12px 20px",
+              cursor: "pointer",
+              boxShadow: "0 6px 20px rgba(45,212,191,0.25)",
+              minHeight: 48,
+              touchAction: "manipulation",
+            }}
+          >
+            Play again
+          </button>
+        )}
         <button
           type="button"
           onClick={onBackHome}
