@@ -445,7 +445,7 @@ export function BrainPanel(props: {
   const reduce = useReducedMotion();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // Stagger pulse: best-effort only — live hop rate may far outpace this.
+  // Stagger pulse: AL→MB→CX (~150ms) finishes inside DECISION_EVERY_MS (~167).
   const [pulseGen, setPulseGen] = useState(0);
   const [activeStage, setActiveStage] = useState(-1);
   const [movePulse, setMovePulse] = useState(false);

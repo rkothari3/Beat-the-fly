@@ -42,11 +42,13 @@ const ROUND_SECONDS = 30;
 /**
  * How often the fly picks a new hop.
  *
- * Absolute maximum: re-decide every animation frame (~1ms threshold so any
- * real frame triggers). Atlas cascade will not keep up. Look-ahead search
- * still uses BOT_TICKS_PER_DECISION for planning horizon.
+ * Reasonable / animation-safe rate:
+ *   - 5 world ticks ≈ 167ms — snappy vs humans, still leaves room for a full
+ *     AL→MB→CX atlas pulse (~150ms) before the next decision resets it.
+ *   - Faster than this (e.g. every frame) cuts the cascade mid-flight.
+ * Keep in sync with BOT_TICKS_PER_DECISION.
  */
-const DECISION_EVERY_MS = 1;
+const DECISION_EVERY_MS = Math.round((5 / 30) * 1000); // ≈167ms
 
 function opponentToController(op: FlyOpponent): FlyController {
   return op === "brain" ? "brain" : "bot";
